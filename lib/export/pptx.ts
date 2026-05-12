@@ -90,6 +90,40 @@ function trunc(text: string | null | undefined, max: number): string {
   return text.length <= max ? text : text.slice(0, max - 1) + '…'
 }
 
+/**
+ * Sentence-boundary truncation for PPTX text.
+ * Tries to cut at 。！？ first, then 、, then falls back to hard cut.
+ * Always appends … when truncated.
+ */
+function truncateSentenceForPpt(text: string | null | undefined, max: number): string {
+  if (!text) return ''
+  if (text.length <= max) return text
+  const candidate = text.slice(0, max)
+  // Try full-stop boundaries
+  const sentenceEnd = Math.max(
+    candidate.lastIndexOf('。'),
+    candidate.lastIndexOf('！'),
+    candidate.lastIndexOf('？'),
+  )
+  if (sentenceEnd > Math.floor(max * 0.45)) {
+    return candidate.slice(0, sentenceEnd + 1) + '…'
+  }
+  // Try clause boundary
+  const clauseEnd = candidate.lastIndexOf('、')
+  if (clauseEnd > Math.floor(max * 0.45)) {
+    return candidate.slice(0, clauseEnd + 1) + '…'
+  }
+  // Hard cut
+  return candidate.slice(0, max - 1) + '…'
+}
+
+/**
+ * Returns the action text for a MarketingInsight, sentence-truncated to 80 chars.
+ */
+function compactActionText(insight: MarketingInsight): string {
+  return truncateSentenceForPpt(insight.suggested_action || insight.insight, 80)
+}
+
 // Numbered list:  "1.  item\n2.  item"
 function nList(items: string[], max: number, truncAt: number): string {
   if (items.length === 0) return '（該当データなし）'
@@ -129,6 +163,7 @@ interface CardOpts {
   labelEn: string   // e.g. "WINNING MESSAGE"
   labelJa: string   // e.g. "使うべき言葉"
   content: string
+  lineSpacing?: number  // lineSpacingMultiple; default 1.45
 }
 
 /** Colored card with left accent bar, section label, separator line, content */
@@ -166,7 +201,7 @@ function addCard(pres: PptxGenJS, slide: PptxGenJS.Slide, opts: CardOpts) {
   slide.addText(opts.content, {
     x: x + PAD, y: y + 0.45, w: w - PAD * 2, h: h - 0.60,
     fontSize: FS.BODY, color: C.BODY,
-    valign: 'top', wrap: true, lineSpacingMultiple: 1.45,
+    valign: 'top', wrap: true, lineSpacingMultiple: opts.lineSpacing ?? 1.45,
   })
 }
 
@@ -198,7 +233,7 @@ function addConclusionCard(
     fill: { color: C.CONC_LINE },
     line: { color: C.CONC_LINE, width: 0 },
   })
-  slide.addText(trunc(text, 260), {
+  slide.addText(truncateSentenceForPpt(text, 180), {
     x: M + PAD, y: y + 0.45, w: W - M * 2 - PAD * 2, h: h - 0.55,
     fontSize: FS.BODY, color: C.BODY,
     valign: 'top', wrap: true, lineSpacingMultiple: 1.45,
@@ -319,10 +354,10 @@ export async function generateProjectOnePagerPptx(
     .slice(0, 3)
     .map((c) => `${trunc(c.label, 38)}（${c.count}件）`)
 
-  // NEXT ACTIONS: high priority first, then medium
+  // NEXT ACTIONS: high priority first, then medium — sentence-boundary truncated to 80 chars
   const actionItems = [
-    ...highInsights.slice(0, 3).map((i) => trunc(i.suggested_action || i.insight, 65)),
-    ...midInsights.slice(0, 2).map((i) => trunc(i.suggested_action || i.insight, 65)),
+    ...highInsights.slice(0, 3).map((i) => compactActionText(i)),
+    ...midInsights.slice(0, 2).map((i) => compactActionText(i)),
   ]
 
   // ── Layout geometry ──────────────────────────────────────────────────────────
@@ -360,7 +395,8 @@ export async function generateProjectOnePagerPptx(
     x: M, y: ACT_Y, w: W - M * 2, h: ACT_H,
     bg: C.ACT_BG, accent: C.ACT_TITLE, lineColor: C.ACT_LINE,
     labelEn: 'NEXT ACTIONS', labelJa: '次に取るべき打ち手',
-    content: nList(actionItems, 4, 80),
+    content: nList(actionItems, 3, 200),  // items already sentence-truncated to 80 chars
+    lineSpacing: 1.25,
   })
 
   addFooter(pres, slide, 'レビュー分析結果に基づく初期提案資料', FTR_Y)
