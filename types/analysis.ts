@@ -205,6 +205,44 @@ export interface CopyworthyPhrase {
   platform_fit: string[]
 }
 
+// ---------------------------------------------------------------------------
+// Step 51: 追加3軸 — 求められているポイント / 想起シーン / 捨てるべき訴求
+// ---------------------------------------------------------------------------
+
+/** 求められているポイント (DemandPoint): 購買前に顧客が強く求めていた機能・属性 */
+export interface DemandPoint {
+  label: string
+  count: number
+  description: string
+  /** 顧客が「これが決め手だった」と語る具体的な証拠フレーズ */
+  evidence_examples: string[]
+  /** LP・広告での活用方法 */
+  marketing_use: string
+}
+
+/** 想起シーン (OccasionInsight): 商品を思い出す・欲しくなる具体的な生活シーン */
+export interface OccasionInsight {
+  occasion: string
+  /** シーンが発生するトリガー（例: 朝のスキンケア中、友人の口コミを見た時） */
+  trigger: string
+  /** そのシーンでの顧客の心理状態 */
+  customer_state: string
+  /** このシーンに刺さるメッセージ訴求 */
+  recommended_message: string
+  evidence_examples: string[]
+}
+
+/** 捨てるべき訴求 (AvoidAppeal): レビューから逆算した「刺さらない・逆効果な」訴求 */
+export interface AvoidAppeal {
+  appeal: string
+  /** なぜこの訴求が逆効果か */
+  reason: string
+  /** 採用した場合のリスク（例: 期待値を上げすぎて返品につながる） */
+  risk: string
+  /** 代わりに使うべき訴求 */
+  replacement_message: string
+}
+
 /** 将来追加予定の分析軸をまとめたオブジェクト型 (MVP では未使用) */
 export interface FutureAxes {
   purchase_triggers?: PurchaseTrigger[]
@@ -240,6 +278,10 @@ export interface ProjectAnalysisResult {
   purchase_reasons: PurchaseReason[]
   customer_types: CustomerType[]
   appeal_words: AppealWord[]
+  // Step 51: 追加3軸
+  demand_points: DemandPoint[]
+  occasion_insights: OccasionInsight[]
+  avoid_appeals: AvoidAppeal[]
   // 総評
   summary: string
   // マーケティング施策出力
@@ -382,6 +424,10 @@ export interface ProjectAnalysis {
   purchase_reasons: PurchaseReason[]
   customer_types: CustomerType[]
   appeal_words: AppealWord[]
+  // Step 51: 追加3軸 (DB migration 008)
+  demand_points: DemandPoint[] | null
+  occasion_insights: OccasionInsight[] | null
+  avoid_appeals: AvoidAppeal[] | null
   summary: string
   marketing_insights: MarketingInsight[]
   lp_suggestions: LpSuggestion[]

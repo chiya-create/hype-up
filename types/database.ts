@@ -96,6 +96,10 @@ type ProjectAnalysisRow = {
   lp_suggestions: Json
   ad_copy_suggestions: Json
   content_ideas: Json
+  // Step 51: migration 008
+  demand_points: Json | null
+  occasion_insights: Json | null
+  avoid_appeals: Json | null
   total_tokens_used: number | null
   chunk_count: number
   raw_response: Json | null
@@ -233,6 +237,10 @@ type ProjectAnalysisInsert = {
   lp_suggestions: Json
   ad_copy_suggestions: Json
   content_ideas: Json
+  // Step 51: migration 008
+  demand_points?: Json | null
+  occasion_insights?: Json | null
+  avoid_appeals?: Json | null
   chunk_count: number
   total_tokens_used?: number | null
   raw_response?: Json | null

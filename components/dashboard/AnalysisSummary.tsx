@@ -1,4 +1,4 @@
-import { Clock, TrendingUp, Layout, Megaphone, BookOpen, ChevronRight } from 'lucide-react'
+import { Clock, TrendingUp, Layout, Megaphone, BookOpen, ChevronRight, Target, MapPin, Ban } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -8,6 +8,9 @@ import type {
   LpSuggestion,
   AdCopySuggestion,
   ContentIdea,
+  DemandPoint,
+  OccasionInsight,
+  AvoidAppeal,
 } from '@/types/analysis'
 
 // ---------------------------------------------------------------------------
@@ -121,6 +124,81 @@ function ContentCard({ idea }: { idea: ContentIdea }) {
   )
 }
 
+function DemandPointCard({ dp }: { dp: DemandPoint }) {
+  return (
+    <div className="space-y-1.5 py-3 first:pt-0 last:pb-0">
+      <div className="flex items-center gap-2 flex-wrap">
+        <p className="text-sm font-semibold">{dp.label}</p>
+        <span className="text-xs text-muted-foreground">{dp.count} 件</span>
+      </div>
+      {dp.description && (
+        <p className="text-xs text-muted-foreground leading-relaxed">{dp.description}</p>
+      )}
+      {dp.evidence_examples && dp.evidence_examples.length > 0 && (
+        <p className="text-xs text-muted-foreground italic">「{dp.evidence_examples[0]}」</p>
+      )}
+      {dp.marketing_use && (
+        <div className="flex items-start gap-1.5">
+          <ChevronRight className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+          <p className="text-xs text-primary font-medium">{dp.marketing_use}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OccasionCard({ oi }: { oi: OccasionInsight }) {
+  return (
+    <div className="space-y-1.5 py-3 first:pt-0 last:pb-0">
+      <p className="text-sm font-semibold">{oi.occasion}</p>
+      <div className="grid grid-cols-2 gap-2">
+        {oi.trigger && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">トリガー</p>
+            <p className="text-xs">{oi.trigger}</p>
+          </div>
+        )}
+        {oi.customer_state && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">心理状態</p>
+            <p className="text-xs">{oi.customer_state}</p>
+          </div>
+        )}
+      </div>
+      {oi.recommended_message && (
+        <div className="rounded bg-primary/5 border border-primary/10 px-2.5 py-1.5">
+          <p className="text-xs font-medium text-primary">推奨メッセージ: {oi.recommended_message}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AvoidAppealCard({ aa }: { aa: AvoidAppeal }) {
+  return (
+    <div className="space-y-1.5 py-3 first:pt-0 last:pb-0">
+      <div className="flex items-start gap-2">
+        <Badge variant="destructive" className="text-xs shrink-0 mt-0.5">NG</Badge>
+        <p className="text-sm font-semibold">{aa.appeal}</p>
+      </div>
+      {aa.reason && (
+        <p className="text-xs text-muted-foreground leading-relaxed">{aa.reason}</p>
+      )}
+      {aa.risk && (
+        <p className="text-xs text-destructive">リスク: {aa.risk}</p>
+      )}
+      {aa.replacement_message && (
+        <div className="flex items-start gap-1.5">
+          <ChevronRight className="h-3.5 w-3.5 text-green-600 mt-0.5 shrink-0" />
+          <p className="text-xs text-green-700 dark:text-green-400 font-medium">
+            代替: {aa.replacement_message}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -148,6 +226,9 @@ export function AnalysisSummary({ analysis }: AnalysisSummaryProps) {
   const lpSuggestions = (analysis.lp_suggestions ?? []) as LpSuggestion[]
   const adCopies = (analysis.ad_copy_suggestions ?? []) as AdCopySuggestion[]
   const contentIdeas = (analysis.content_ideas ?? []) as ContentIdea[]
+  const demandPoints = (analysis.demand_points ?? []) as DemandPoint[]
+  const occasionInsights = (analysis.occasion_insights ?? []) as OccasionInsight[]
+  const avoidAppeals = (analysis.avoid_appeals ?? []) as AvoidAppeal[]
 
   return (
     <div className="space-y-6">
@@ -243,6 +324,69 @@ export function AnalysisSummary({ analysis }: AnalysisSummaryProps) {
               <div key={i}>
                 {i > 0 && <Separator className="my-0" />}
                 <ContentCard idea={idea} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 求められているポイント */}
+      {demandPoints.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <SectionHeader
+              icon={Target}
+              title="求められているポイント"
+              count={demandPoints.length}
+            />
+          </CardHeader>
+          <CardContent>
+            {demandPoints.map((dp, i) => (
+              <div key={i}>
+                {i > 0 && <Separator className="my-0" />}
+                <DemandPointCard dp={dp} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 想起シーン */}
+      {occasionInsights.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <SectionHeader
+              icon={MapPin}
+              title="想起シーン"
+              count={occasionInsights.length}
+            />
+          </CardHeader>
+          <CardContent>
+            {occasionInsights.map((oi, i) => (
+              <div key={i}>
+                {i > 0 && <Separator className="my-0" />}
+                <OccasionCard oi={oi} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 捨てるべき訴求 */}
+      {avoidAppeals.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <SectionHeader
+              icon={Ban}
+              title="捨てるべき訴求"
+              count={avoidAppeals.length}
+            />
+          </CardHeader>
+          <CardContent>
+            {avoidAppeals.map((aa, i) => (
+              <div key={i}>
+                {i > 0 && <Separator className="my-0" />}
+                <AvoidAppealCard aa={aa} />
               </div>
             ))}
           </CardContent>

@@ -25,6 +25,9 @@ import type {
   LpSuggestion,
   AdCopySuggestion,
   ContentIdea,
+  DemandPoint,
+  OccasionInsight,
+  AvoidAppeal,
 } from '@/types/analysis'
 
 // ---------------------------------------------------------------------------
@@ -135,6 +138,9 @@ export async function GET(
   const lpSuggestions = (analysisRow.lp_suggestions ?? []) as unknown as LpSuggestion[]
   const adCopySuggestions = (analysisRow.ad_copy_suggestions ?? []) as unknown as AdCopySuggestion[]
   const contentIdeas = (analysisRow.content_ideas ?? []) as unknown as ContentIdea[]
+  const demandPoints = (analysisRow.demand_points ?? []) as unknown as DemandPoint[]
+  const occasionInsights = (analysisRow.occasion_insights ?? []) as unknown as OccasionInsight[]
+  const avoidAppeals = (analysisRow.avoid_appeals ?? []) as unknown as AvoidAppeal[]
 
   // CSV 生成
   let csvContent: string
@@ -177,6 +183,9 @@ export async function GET(
         lp_suggestions: lpSuggestions,
         ad_copy_suggestions: adCopySuggestions,
         content_ideas: contentIdeas,
+        demand_points: demandPoints,
+        occasion_insights: occasionInsights,
+        avoid_appeals: avoidAppeals,
       })
       break
   }

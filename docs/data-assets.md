@@ -95,7 +95,28 @@ aggregated_insights (
 | LP改善パターン集 | `aggregated_insights` (insight_type: rating_point) + `project_analyses.lp_suggestions` | 🟡 部分的（各社個別） |
 | 競合比較ベンチマーク | `comparison_reports` + `aggregated_insights` | 🟡 部分的 |
 
-### 5-2. 将来追加候補
+### 5-2. Step 51 で追加された分析軸（`project_analyses` 列）
+
+Step 51（2026-05-11）で以下の 3 軸を `project_analyses` テーブルに追加した（migration 008）。
+
+| 列名 | 型 | 説明 |
+|------|----|------|
+| `demand_points` | `jsonb` | 求められているポイント: 購買前に顧客が強く求めていた機能・属性 |
+| `occasion_insights` | `jsonb` | 想起シーン: 商品を思い出す・欲しくなる具体的な生活シーン |
+| `avoid_appeals` | `jsonb` | 捨てるべき訴求: レビューから逆算した逆効果な訴求 |
+
+これらは現時点では**個社分析結果として `project_analyses` にのみ格納**されており、
+`aggregated_insights` への集計はまだ実装されていない。
+
+**将来の集計パス（Phase 3 候補）:**
+
+```
+project_analyses.demand_points[]  → aggregated_insights (insight_type: 'demand_point')
+project_analyses.occasion_insights[] → product_occasion_insights（新テーブル）
+project_analyses.avoid_appeals[]  → avoid_appeals_db（新テーブル: 業界別 NG 訴求集）
+```
+
+### 5-3. 将来追加候補
 
 #### `product_demand_points`（商品別の求められているポイント）
 
@@ -134,14 +155,15 @@ product_occasion_insights (
 )
 ```
 
-### 5-3. データ蓄積のロードマップ
+### 5-4. データ蓄積のロードマップ
 
 | フェーズ | 内容 |
 |---------|------|
 | Phase 1（完了） | `aggregated_insights` で業界別の基本 4 軸（評価・不満・購買理由・訴求ワード）を蓄積 |
-| Phase 2（現在） | RLS 有効化・マルチテナント完備。データ品質向上 |
-| Phase 3（将来） | `product_demand_points` 追加。商品タイプ別の蓄積開始 |
-| Phase 4（将来） | `product_occasion_insights` 追加。想起状況・購入文脈の蓄積開始 |
+| Phase 2（完了） | RLS 有効化・マルチテナント完備。データ品質向上 |
+| Phase 2.5（完了・Step 51） | `project_analyses` に `demand_points` / `occasion_insights` / `avoid_appeals` を追加（migration 008）。個社分析として生成・表示 |
+| Phase 3（将来） | `product_demand_points` / `product_occasion_insights` 集計テーブルを追加。業界横断でのシーン・Demand 集計開始 |
+| Phase 4（将来） | 業界別 NG 訴求データベース（`avoid_appeals_db`）を追加。類似商品への自動警告機能 |
 | Phase 5（将来） | 業界別レポートの自動生成・販売・ホワイトペーパー展開 |
 
 ---

@@ -8,6 +8,9 @@ import type {
   LpSuggestion,
   AdCopySuggestion,
   ContentIdea,
+  DemandPoint,
+  OccasionInsight,
+  AvoidAppeal,
 } from '@/types/analysis'
 
 // ---------------------------------------------------------------------------
@@ -149,6 +152,42 @@ export function generateContentIdeasCsv(items: ContentIdea[]): string {
   return buildCsv(header, rows)
 }
 
+export function generateDemandPointsCsv(items: DemandPoint[]): string {
+  const header = ['求められているポイント', '件数', '説明', '証拠フレーズ', 'LP・広告活用法']
+  const rows = items.map((item) =>
+    row(
+      item.label,
+      item.count,
+      item.description,
+      item.evidence_examples.join(' / '),
+      item.marketing_use
+    )
+  )
+  return buildCsv(header, rows)
+}
+
+export function generateOccasionInsightsCsv(items: OccasionInsight[]): string {
+  const header = ['想起シーン', 'トリガー', '心理状態', '推奨メッセージ', '証拠フレーズ']
+  const rows = items.map((item) =>
+    row(
+      item.occasion,
+      item.trigger,
+      item.customer_state,
+      item.recommended_message,
+      item.evidence_examples.join(' / ')
+    )
+  )
+  return buildCsv(header, rows)
+}
+
+export function generateAvoidAppealsCsv(items: AvoidAppeal[]): string {
+  const header = ['捨てるべき訴求（NG）', '逆効果な理由', 'リスク', '代替訴求']
+  const rows = items.map((item) =>
+    row(item.appeal, item.reason, item.risk, item.replacement_message)
+  )
+  return buildCsv(header, rows)
+}
+
 // ---------------------------------------------------------------------------
 // all: セクション区切りで1ファイルに結合
 // ---------------------------------------------------------------------------
@@ -163,6 +202,9 @@ interface AllCsvInput {
   lp_suggestions: LpSuggestion[]
   ad_copy_suggestions: AdCopySuggestion[]
   content_ideas: ContentIdea[]
+  demand_points?: DemandPoint[]
+  occasion_insights?: OccasionInsight[]
+  avoid_appeals?: AvoidAppeal[]
 }
 
 function stripBom(csv: string): string {
@@ -172,7 +214,7 @@ function stripBom(csv: string): string {
 export function generateAllCsv(data: AllCsvInput): string {
   const BOM = '﻿'
 
-  const sections = [
+  const sections: { title: string; csv: string }[] = [
     { title: '■ 評価ポイント', csv: generateRatingPointsCsv(data.rating_points) },
     { title: '■ 不満点', csv: generateComplaintsCsv(data.complaints) },
     { title: '■ 購入理由', csv: generatePurchaseReasonsCsv(data.purchase_reasons) },
@@ -182,6 +224,15 @@ export function generateAllCsv(data: AllCsvInput): string {
     { title: '■ LP改善案', csv: generateLpSuggestionsCsv(data.lp_suggestions) },
     { title: '■ 広告コピー案', csv: generateAdCopySuggestionsCsv(data.ad_copy_suggestions) },
     { title: '■ コンテンツアイデア', csv: generateContentIdeasCsv(data.content_ideas) },
+    ...(data.demand_points && data.demand_points.length > 0
+      ? [{ title: '■ 求められているポイント', csv: generateDemandPointsCsv(data.demand_points) }]
+      : []),
+    ...(data.occasion_insights && data.occasion_insights.length > 0
+      ? [{ title: '■ 想起シーン', csv: generateOccasionInsightsCsv(data.occasion_insights) }]
+      : []),
+    ...(data.avoid_appeals && data.avoid_appeals.length > 0
+      ? [{ title: '■ 捨てるべき訴求', csv: generateAvoidAppealsCsv(data.avoid_appeals) }]
+      : []),
   ]
 
   const body = sections

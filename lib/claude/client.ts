@@ -20,6 +20,9 @@ import type {
   LpSuggestion,
   AdCopySuggestion,
   ContentIdea,
+  DemandPoint,
+  OccasionInsight,
+  AvoidAppeal,
   ComparisonProject,
   ComparisonResult,
   WinningAppeal,
@@ -53,6 +56,9 @@ export interface SynthesisOutput {
     lp_suggestions: LpSuggestion[]
     ad_copy_suggestions: AdCopySuggestion[]
     content_ideas: ContentIdea[]
+    demand_points: DemandPoint[]
+    occasion_insights: OccasionInsight[]
+    avoid_appeals: AvoidAppeal[]
   }
   raw_text: string
   tokens_used: number
@@ -249,12 +255,47 @@ function validateSynthesisResult(parsed: unknown): SynthesisOutput['result'] {
     }
   }
 
+  const normalizeDemandPoint = (item: unknown): DemandPoint => {
+    const i = (item ?? {}) as Record<string, unknown>
+    return {
+      label: toString(i.label, ''),
+      count: typeof i.count === 'number' ? i.count : 0,
+      description: toString(i.description),
+      evidence_examples: toArray<string>(i.evidence_examples).map((e) => String(e)),
+      marketing_use: toString(i.marketing_use),
+    }
+  }
+
+  const normalizeOccasionInsight = (item: unknown): OccasionInsight => {
+    const i = (item ?? {}) as Record<string, unknown>
+    return {
+      occasion: toString(i.occasion, ''),
+      trigger: toString(i.trigger),
+      customer_state: toString(i.customer_state),
+      recommended_message: toString(i.recommended_message),
+      evidence_examples: toArray<string>(i.evidence_examples).map((e) => String(e)),
+    }
+  }
+
+  const normalizeAvoidAppeal = (item: unknown): AvoidAppeal => {
+    const i = (item ?? {}) as Record<string, unknown>
+    return {
+      appeal: toString(i.appeal, ''),
+      reason: toString(i.reason),
+      risk: toString(i.risk),
+      replacement_message: toString(i.replacement_message),
+    }
+  }
+
   return {
     summary: toString(p.summary),
     marketing_insights: toArray(p.marketing_insights).map(normalizeInsight),
     lp_suggestions: toArray(p.lp_suggestions).map(normalizeLp),
     ad_copy_suggestions: toArray(p.ad_copy_suggestions).map(normalizeAd),
     content_ideas: toArray(p.content_ideas).map(normalizeContent),
+    demand_points: toArray(p.demand_points).map(normalizeDemandPoint),
+    occasion_insights: toArray(p.occasion_insights).map(normalizeOccasionInsight),
+    avoid_appeals: toArray(p.avoid_appeals).map(normalizeAvoidAppeal),
   }
 }
 

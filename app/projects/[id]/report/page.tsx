@@ -31,6 +31,9 @@ import type {
   LpSuggestion,
   AdCopySuggestion,
   ContentIdea,
+  DemandPoint,
+  OccasionInsight,
+  AvoidAppeal,
 } from '@/types/analysis'
 
 // ---------------------------------------------------------------------------
@@ -117,6 +120,9 @@ export default async function ReportPage({
   const lpSuggestions = (analysis.lp_suggestions ?? []) as LpSuggestion[]
   const adCopies = (analysis.ad_copy_suggestions ?? []) as AdCopySuggestion[]
   const contentIdeas = (analysis.content_ideas ?? []) as ContentIdea[]
+  const demandPoints = (analysis.demand_points ?? []) as DemandPoint[]
+  const occasionInsights = (analysis.occasion_insights ?? []) as OccasionInsight[]
+  const avoidAppeals = (analysis.avoid_appeals ?? []) as AvoidAppeal[]
   const highInsights = insights.filter((ins) => ins.priority === 'high')
 
   // aggregated_insights は service role 経由で取得（RLS 有効化後も anon key では読めない）
@@ -505,6 +511,119 @@ export default async function ReportPage({
           description="SNS・ブログ・動画などのコンテンツマーケティングに活用できる企画案です"
         >
           <SuggestionCards type="content" items={contentIdeas} />
+        </ReportSection>
+
+        {/* ── 求められているポイント */}
+        <ReportSection
+          title="求められているポイント"
+          description="購買前に顧客が強く求めていた機能・属性。LP訴求軸の選定に活用できます"
+        >
+          {demandPoints.length === 0 ? (
+            <p className="text-sm text-muted-foreground">該当データはありません</p>
+          ) : (
+            <div className="space-y-5">
+              {demandPoints.map((dp, i) => (
+                <div key={i} className="flex gap-4">
+                  <span className="text-2xl font-bold text-muted-foreground/30 tabular-nums shrink-0 w-8 text-right">
+                    {i + 1}
+                  </span>
+                  <div className="space-y-1 flex-1 pt-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-sm">{dp.label}</p>
+                      <span className="text-xs text-muted-foreground">{dp.count} 件</span>
+                    </div>
+                    {dp.description && (
+                      <p className="text-xs text-muted-foreground leading-relaxed">{dp.description}</p>
+                    )}
+                    {dp.evidence_examples && dp.evidence_examples.length > 0 && (
+                      <p className="text-xs text-muted-foreground italic">「{dp.evidence_examples[0]}」</p>
+                    )}
+                    {dp.marketing_use && (
+                      <p className="text-xs text-primary font-medium">
+                        <ChevronRight className="inline h-3 w-3 mr-0.5" />
+                        {dp.marketing_use}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </ReportSection>
+
+        {/* ── 想起シーン */}
+        <ReportSection
+          title="想起シーン"
+          description="商品を思い出す・欲しくなる生活シーン。広告ターゲティングとクリエイティブ設計に活用できます"
+        >
+          {occasionInsights.length === 0 ? (
+            <p className="text-sm text-muted-foreground">該当データはありません</p>
+          ) : (
+            <div className="space-y-5">
+              {occasionInsights.map((oi, i) => (
+                <div key={i} className="rounded-lg border bg-muted/20 px-4 py-3 space-y-2">
+                  <p className="font-semibold text-sm">{oi.occasion}</p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {oi.trigger && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">トリガー</p>
+                        <p className="text-xs leading-relaxed">{oi.trigger}</p>
+                      </div>
+                    )}
+                    {oi.customer_state && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">心理状態</p>
+                        <p className="text-xs leading-relaxed">{oi.customer_state}</p>
+                      </div>
+                    )}
+                  </div>
+                  {oi.recommended_message && (
+                    <div className="rounded bg-primary/5 border border-primary/10 px-2.5 py-1.5">
+                      <p className="text-xs font-medium text-primary">
+                        推奨メッセージ: {oi.recommended_message}
+                      </p>
+                    </div>
+                  )}
+                  {oi.evidence_examples && oi.evidence_examples.length > 0 && (
+                    <p className="text-xs text-muted-foreground italic">「{oi.evidence_examples[0]}」</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </ReportSection>
+
+        {/* ── 捨てるべき訴求 */}
+        <ReportSection
+          title="捨てるべき訴求"
+          description="レビューから逆算した「刺さらない・逆効果な」訴求。広告クリエイティブのNG集です"
+        >
+          {avoidAppeals.length === 0 ? (
+            <p className="text-sm text-muted-foreground">該当データはありません</p>
+          ) : (
+            <div className="space-y-5">
+              {avoidAppeals.map((aa, i) => (
+                <div key={i} className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 space-y-1.5">
+                  <div className="flex items-start gap-2">
+                    <Badge variant="destructive" className="text-xs shrink-0 mt-0.5">NG</Badge>
+                    <p className="font-semibold text-sm">{aa.appeal}</p>
+                  </div>
+                  {aa.reason && (
+                    <p className="text-xs text-muted-foreground leading-relaxed">{aa.reason}</p>
+                  )}
+                  {aa.risk && (
+                    <p className="text-xs text-destructive font-medium">リスク: {aa.risk}</p>
+                  )}
+                  {aa.replacement_message && (
+                    <p className="text-xs text-green-700 dark:text-green-400 font-medium">
+                      <ChevronRight className="inline h-3 w-3 mr-0.5" />
+                      代替訴求: {aa.replacement_message}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </ReportSection>
 
         {/* ── 次に取るべきアクション */}

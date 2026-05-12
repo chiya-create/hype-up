@@ -12,6 +12,9 @@ import type {
   LpSuggestion,
   AdCopySuggestion,
   ContentIdea,
+  DemandPoint,
+  OccasionInsight,
+  AvoidAppeal,
   ComparisonProject,
   ReviewForAnalysis,
 } from '@/types/analysis'
@@ -262,6 +265,32 @@ ${JSON.stringify(aggregated.appeal_words.slice(0, 10), null, 2)}
       "angle": "切り口・アングル（なぜ読まれるか・なぜシェアされるか・どの顧客の悩みを刺激するか）",
       "key_message": "このコンテンツが最終的に伝えるべきコアメッセージ（購買につながる1文）"
     }
+  ],
+  "demand_points": [
+    {
+      "label": "顧客が購買前に強く求めていた機能・属性の名称（例: 低刺激・無香料・速乾性）",
+      "count": 0,
+      "description": "このDemandPointの背景・文脈（例: どんな悩みを持つ顧客が何を期待して購入したか）",
+      "evidence_examples": ["レビューから抽出した具体的な証拠フレーズ（1〜3個）"],
+      "marketing_use": "LP・広告でのこのDemandPointの活用法（例: ファーストビューの訴求軸にする・仕様比較表に明示する）"
+    }
+  ],
+  "occasion_insights": [
+    {
+      "occasion": "商品を思い出す・欲しくなる具体的な生活シーン（例: 朝の洗顔後・デート前夜・肌荒れがひどい週）",
+      "trigger": "そのシーンを発生させる具体的なトリガー（例: 鏡で肌荒れを見た瞬間・友人の「最近肌きれいだね」の一言）",
+      "customer_state": "シーン発生時の顧客の心理・感情状態（例: 焦り・期待・自信喪失・変化したい気持ち）",
+      "recommended_message": "このシーンで最も刺さる訴求メッセージ（15〜30文字の広告ヘッドライン候補）",
+      "evidence_examples": ["そのシーンを示唆するレビューフレーズ（1〜2個）"]
+    }
+  ],
+  "avoid_appeals": [
+    {
+      "appeal": "避けるべき訴求の具体的な内容（例: 「翌日から効果実感」「敏感肌でも絶対大丈夫」）",
+      "reason": "なぜこの訴求が逆効果か（レビューの証拠に基づく根拠）",
+      "risk": "この訴求を使った場合の具体的なリスク（例: 期待値過多による返品増加・低評価レビュー集中）",
+      "replacement_message": "代わりに使うべき正直で刺さる代替訴求（例: 「1週間後から変化を感じる人が多数」）"
+    }
   ]
 }
 \`\`\`
@@ -271,6 +300,9 @@ ${JSON.stringify(aggregated.appeal_words.slice(0, 10), null, 2)}
 - lp_suggestions は3〜5件（ファーストビューを必ず含める）
 - ad_copy_suggestions は3〜5件（プラットフォームが重複しないこと）
 - content_ideas は3〜5件（フォーマットが重複しないこと）
+- demand_points は3〜5件（購買前の「これが欲しかった」ポイントを抽出すること）
+- occasion_insights は3〜5件（実際の生活シーンに根ざした具体的な場面を抽出すること）
+- avoid_appeals は2〜4件（誇張・誤解を招くと思われる訴求を必ず1件以上含めること）
 - すべて日本語で出力すること`
 }
 
@@ -411,7 +443,15 @@ export function parseSynthesisResponse(
 ): Omit<
   ProjectAnalysisResult,
   'rating_points' | 'complaints' | 'purchase_reasons' | 'customer_types' | 'appeal_words' | 'future_axes'
-> & { marketing_insights: MarketingInsight[]; lp_suggestions: LpSuggestion[]; ad_copy_suggestions: AdCopySuggestion[]; content_ideas: ContentIdea[] } {
+> & {
+  marketing_insights: MarketingInsight[]
+  lp_suggestions: LpSuggestion[]
+  ad_copy_suggestions: AdCopySuggestion[]
+  content_ideas: ContentIdea[]
+  demand_points: DemandPoint[]
+  occasion_insights: OccasionInsight[]
+  avoid_appeals: AvoidAppeal[]
+} {
   const json = extractJson(text)
   const parsed = JSON.parse(json)
   return {
@@ -420,5 +460,8 @@ export function parseSynthesisResponse(
     lp_suggestions: parsed.lp_suggestions ?? [],
     ad_copy_suggestions: parsed.ad_copy_suggestions ?? [],
     content_ideas: parsed.content_ideas ?? [],
+    demand_points: parsed.demand_points ?? [],
+    occasion_insights: parsed.occasion_insights ?? [],
+    avoid_appeals: parsed.avoid_appeals ?? [],
   }
 }

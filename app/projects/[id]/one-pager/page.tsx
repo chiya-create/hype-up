@@ -21,6 +21,8 @@ import type {
   MarketingInsight,
   LpSuggestion,
   AdCopySuggestion,
+  OccasionInsight,
+  AvoidAppeal,
 } from '@/types/analysis'
 
 function formatDateTime(iso: string | null) {
@@ -100,6 +102,8 @@ export default async function ProjectOnePagerPage({
   const insights = (analysis.marketing_insights ?? []) as MarketingInsight[]
   const lpSuggestions = (analysis.lp_suggestions ?? []) as LpSuggestion[]
   const adCopies = (analysis.ad_copy_suggestions ?? []) as AdCopySuggestion[]
+  const occasionInsights = (analysis.occasion_insights ?? []) as OccasionInsight[]
+  const avoidAppeals = (analysis.avoid_appeals ?? []) as AvoidAppeal[]
 
   const highInsights = insights.filter((i) => i.priority === 'high')
 
@@ -207,6 +211,27 @@ export default async function ProjectOnePagerPage({
               <OnePagerList items={messageItems} maxItems={4} />
             </SummaryBlock>
           </div>
+
+          {/* 想起シーン × 推奨メッセージ */}
+          {occasionInsights.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 one-pager-grid">
+              <SummaryBlock title="想起シーン（Demand Moment）" variant="conclusion">
+                <OnePagerList
+                  items={occasionInsights.slice(0, 3).map((oi) => oi.occasion)}
+                  maxItems={3}
+                />
+              </SummaryBlock>
+
+              <SummaryBlock title="捨てるべき訴求 → 代替案" variant="issue">
+                <OnePagerList
+                  items={avoidAppeals.slice(0, 3).map(
+                    (aa) => `${aa.appeal} → ${aa.replacement_message}`
+                  )}
+                  maxItems={3}
+                />
+              </SummaryBlock>
+            </div>
+          )}
 
           {/* 次アクション */}
           <SummaryBlock title="次に取るべきアクション" variant="action">

@@ -308,12 +308,18 @@ export async function POST(req: NextRequest) {
     lp_suggestions: unknown[]
     ad_copy_suggestions: unknown[]
     content_ideas: unknown[]
+    demand_points: unknown[]
+    occasion_insights: unknown[]
+    avoid_appeals: unknown[]
   } = {
     summary: '',
     marketing_insights: [],
     lp_suggestions: [],
     ad_copy_suggestions: [],
     content_ideas: [],
+    demand_points: [],
+    occasion_insights: [],
+    avoid_appeals: [],
   }
 
   try {
@@ -351,6 +357,9 @@ export async function POST(req: NextRequest) {
         lp_suggestions: synthResult.lp_suggestions as unknown as Json,
         ad_copy_suggestions: synthResult.ad_copy_suggestions as unknown as Json,
         content_ideas: synthResult.content_ideas as unknown as Json,
+        demand_points: synthResult.demand_points as unknown as Json,
+        occasion_insights: synthResult.occasion_insights as unknown as Json,
+        avoid_appeals: synthResult.avoid_appeals as unknown as Json,
         chunk_count: doneChunks.length,
         total_tokens_used: totalTokens,
         raw_response: synthesisRawText
@@ -380,6 +389,9 @@ export async function POST(req: NextRequest) {
       lp_suggestions: synthResult.lp_suggestions as never,
       ad_copy_suggestions: synthResult.ad_copy_suggestions as never,
       content_ideas: synthResult.content_ideas as never,
+      demand_points: synthResult.demand_points as never,
+      occasion_insights: synthResult.occasion_insights as never,
+      avoid_appeals: synthResult.avoid_appeals as never,
       future_axes: null,
       total_tokens_used: totalTokens,
       chunk_count: doneChunks.length,

@@ -22,6 +22,9 @@ function buildCheckItems(analysis: ProjectAnalysis): CheckItem[] {
   const lpSuggestions = analysis.lp_suggestions ?? []
   const adCopies = analysis.ad_copy_suggestions ?? []
   const contentIdeas = analysis.content_ideas ?? []
+  const demandPoints = analysis.demand_points ?? []
+  const occasionInsights = analysis.occasion_insights ?? []
+  const avoidAppeals = analysis.avoid_appeals ?? []
   const summary = analysis.summary ?? ''
 
   // copyworthy_phrases の充実度チェック
@@ -216,6 +219,46 @@ function buildCheckItems(analysis: ProjectAnalysis): CheckItem[] {
       hint:
         contentIdeas.length === 0
           ? 'synthesis プロンプトで「content_ideas を 3〜5 件生成する」と指定してください'
+          : undefined,
+    },
+    {
+      label: '求められているポイント',
+      ok: demandPoints.length >= 3,
+      message:
+        demandPoints.length === 0
+          ? '求められているポイントが生成されていません'
+          : demandPoints.length < 3
+            ? `${demandPoints.length} 件（3 件以上推奨）`
+            : `${demandPoints.length} 件 OK`,
+      hint:
+        demandPoints.length < 3
+          ? 'synthesis プロンプトで「demand_points を 3〜5 件生成する」と指定してください（再分析が必要な場合があります）'
+          : undefined,
+    },
+    {
+      label: '想起シーン',
+      ok: occasionInsights.length >= 3,
+      message:
+        occasionInsights.length === 0
+          ? '想起シーンが生成されていません'
+          : occasionInsights.length < 3
+            ? `${occasionInsights.length} 件（3 件以上推奨）`
+            : `${occasionInsights.length} 件 OK`,
+      hint:
+        occasionInsights.length < 3
+          ? 'synthesis プロンプトで「occasion_insights を 3〜5 件、具体的な生活シーンとして抽出する」と指定してください'
+          : undefined,
+    },
+    {
+      label: '捨てるべき訴求',
+      ok: avoidAppeals.length >= 1,
+      message:
+        avoidAppeals.length === 0
+          ? '捨てるべき訴求が生成されていません'
+          : `${avoidAppeals.length} 件 OK`,
+      hint:
+        avoidAppeals.length === 0
+          ? 'synthesis プロンプトで「avoid_appeals を 2〜4 件、逆効果な訴求の根拠とリスクを明記する」と指定してください'
           : undefined,
     },
   ]
