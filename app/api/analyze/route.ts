@@ -23,6 +23,7 @@ import type { Json } from '@/types/database'
 import { logUsageEvent } from '@/lib/usage/log'
 import { aggregateProjectInsights } from '@/lib/insights/aggregate'
 import { getCurrentUserAccessContext, canAnalyze, isPlatformAdmin } from '@/lib/auth/permissions'
+import { CHUNK_SIZE } from '@/lib/constants'
 
 // ---------------------------------------------------------------------------
 // Aggregation helper
@@ -152,6 +153,7 @@ export async function POST(req: NextRequest) {
     .update({
       status: 'analyzing',
       analysis_started_at: new Date().toISOString(),
+      analysis_completed_at: null,
       error_message: null,
     })
     .eq('id', projectId)
@@ -162,21 +164,96 @@ export async function POST(req: NextRequest) {
     eventType: 'analysis_started',
   })
 
-  // ── 5. pending/error チャンク取得（chunk_index 昇順）──────────────────
+  // ── 5. 全チャンクをリセット（再分析対応）─────────────────────────────
+  // 既存チャンクの有無を確認
+  const { count: existingChunkCount } = await supabase
+    .from('analysis_chunks')
+    .select('id', { count: 'exact' })
+    .eq('project_id', projectId)
+
+  if (existingChunkCount && existingChunkCount > 0) {
+    // チャンクが存在する場合 → 全件を pending にリセット
+    await supabase
+      .from('analysis_chunks')
+      .update({
+        status: 'pending',
+        rating_points: null,
+        complaints: null,
+        purchase_reasons: null,
+        customer_types: null,
+        appeal_words: null,
+        summary: null,
+        token_used: null,
+        raw_response: null,
+        error_message: null,
+      })
+      .eq('project_id', projectId)
+  } else {
+    // チャンクが存在しない場合 → reviews から再生成
+    const { data: reviewRows } = await supabase
+      .from('reviews')
+      .select('id')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true })
+
+    const reviewIds = (reviewRows ?? []).map((r) => r.id)
+    if (reviewIds.length === 0) {
+      await supabase
+        .from('projects')
+        .update({ status: 'error', error_message: 'レビューが見つかりません' })
+        .eq('id', projectId)
+      return NextResponse.json(
+        { error: 'このプロジェクトにはレビューがありません' },
+        { status: 400 }
+      )
+    }
+
+    const chunkInserts: Array<{
+      project_id: string
+      chunk_index: number
+      review_ids: string[]
+      status: 'pending'
+    }> = []
+    for (let i = 0; i < reviewIds.length; i += CHUNK_SIZE) {
+      chunkInserts.push({
+        project_id: projectId,
+        chunk_index: chunkInserts.length,
+        review_ids: reviewIds.slice(i, i + CHUNK_SIZE),
+        status: 'pending',
+      })
+    }
+
+    const { error: insertError } = await supabase
+      .from('analysis_chunks')
+      .insert(chunkInserts)
+
+    if (insertError) {
+      await supabase
+        .from('projects')
+        .update({ status: 'error', error_message: 'チャンク再生成に失敗しました' })
+        .eq('id', projectId)
+      return NextResponse.json(
+        { error: 'チャンク再生成に失敗しました', detail: insertError.message },
+        { status: 500 }
+      )
+    }
+  }
+
+  // ── 5-b. pending チャンク取得（chunk_index 昇順）──────────────────────
   const { data: chunks } = await supabase
     .from('analysis_chunks')
     .select('*')
     .eq('project_id', projectId)
-    .in('status', ['pending', 'error'])
+    .eq('status', 'pending')
     .order('chunk_index', { ascending: true })
 
   if (!chunks || chunks.length === 0) {
     await supabase
       .from('projects')
-      .update({ status: 'error', error_message: '処理対象のチャンクがありません' })
+      .update({ status: 'error', error_message: '処理対象のチャンクがありません（チャンク生成に失敗した可能性があります）' })
       .eq('id', projectId)
     return NextResponse.json(
-      { error: '処理対象のチャンクがありません' },
+      { error: '処理対象のチャンクがありません（チャンク生成に失敗した可能性があります）' },
       { status: 400 }
     )
   }
