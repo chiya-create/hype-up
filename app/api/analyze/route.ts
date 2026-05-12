@@ -8,6 +8,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import {
   analyzeChunkWithClaude,
   synthesizeProjectAnalysisWithClaude,
+  buildFallbackSynthesisResult,
   type AggregatedAxes,
 } from '@/lib/claude/client'
 import type {
@@ -412,10 +413,15 @@ export async function POST(req: NextRequest) {
     synthesisTokens = synthesisOutput.tokens_used
     totalTokens += synthesisTokens
   } catch (err) {
-    // 統合分析が失敗してもチャンク結果は保存する（partial_error 扱い）
-    console.error('統合分析エラー:', err)
-    synthResult.summary =
-      err instanceof Error ? `統合分析エラー: ${err.message}` : '統合分析に失敗しました'
+    // 統合分析が失敗しても fallback を使ってチャンク集計から最低限の結果を生成する
+    const errMsg = err instanceof Error ? err.message : String(err)
+    console.error('統合分析エラー（fallback で継続）:', errMsg)
+    synthResult = buildFallbackSynthesisResult(aggregated)
+    // summary に fallback 由来であることを記録（QualityCheckCard で視認できるようにするため）
+    synthResult = {
+      ...synthResult,
+      summary: `【fallback生成】統合分析エラーのため自動生成されました。再分析を推奨します。\nエラー: ${errMsg.slice(0, 200)}\n\n${synthResult.summary}`,
+    }
   }
 
   // ── 9. project_analyses upsert ────────────────────────────────────────

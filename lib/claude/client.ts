@@ -37,7 +37,10 @@ import type {
 // ---------------------------------------------------------------------------
 
 const MAX_TOKENS_CHUNK = 16_000
-const MAX_TOKENS_SYNTHESIS = 8_192
+// Step 53: 8,192 → 16,000 に引き上げ。
+// Step 51 で synthesis 出力が 7 配列になり、8,192 では日本語テキスト量次第で
+// JSON truncation が発生していた（エラー位置 ~10,512 chars）。
+const MAX_TOKENS_SYNTHESIS = 16_000
 
 // ---------------------------------------------------------------------------
 // Output types
@@ -112,15 +115,78 @@ function extractText(response: Anthropic.Message): string {
   return block.text
 }
 
+/** Trailing comma（,} または ,]）を除去して JSON を修復する */
+function removeTrailingCommas(json: string): string {
+  // ,  の後に } か ] が続く（空白・改行を挟んでいてもよい）パターンを削除
+  return json.replace(/,(\s*[}\]])/g, '$1')
+}
+
+/** truncation で末尾が壊れた JSON を可能な範囲で閉じて修復する */
+function repairTruncatedJson(json: string): string {
+  // 開き括弧の stack を追跡して不足している閉じ括弧を補う
+  const stack: string[] = []
+  let inString = false
+  let escape = false
+  for (let i = 0; i < json.length; i++) {
+    const ch = json[i]
+    if (escape) { escape = false; continue }
+    if (ch === '\\' && inString) { escape = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') stack.push('}')
+    else if (ch === '[') stack.push(']')
+    else if (ch === '}' || ch === ']') stack.pop()
+  }
+  // 不足分を末尾に追加（逆順）
+  return json + stack.reverse().join('')
+}
+
+/** Claude レスポンスから JSON 文字列を抽出・修復する */
 function extractJson(text: string): string {
-  // ```json ... ``` ブロックを優先
+  // Step 1: ``` フェンスを優先的に剥がす
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
-  if (fenced?.[1]) return fenced[1]
-  // フォールバック: 最初の { から最後の } まで
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  if (start !== -1 && end > start) return text.slice(start, end + 1)
-  throw new Error('レスポンスから JSON を抽出できませんでした')
+  let raw = fenced?.[1] ?? ''
+
+  // Step 2: フェンスがない場合は最初の { から最後の } まで
+  if (!raw) {
+    const start = text.indexOf('{')
+    const end = text.lastIndexOf('}')
+    if (start !== -1 && end > start) {
+      raw = text.slice(start, end + 1)
+    } else if (start !== -1) {
+      // } が見つからない → truncation の可能性
+      raw = text.slice(start)
+    }
+  }
+
+  if (!raw) throw new Error('レスポンスから JSON を抽出できませんでした')
+
+  // Step 3: まずそのまま parse を試みる
+  try {
+    JSON.parse(raw)
+    return raw
+  } catch {
+    // Step 4: trailing comma を除去して再 parse
+    const cleaned = removeTrailingCommas(raw)
+    try {
+      JSON.parse(cleaned)
+      return cleaned
+    } catch {
+      // Step 5: truncation repair して再 parse
+      const repaired = repairTruncatedJson(cleaned)
+      try {
+        JSON.parse(repaired)
+        return repaired
+      } catch (finalErr) {
+        // 修復不能 — 呼び出し元でエラーハンドリングできるよう詳細を添付してスロー
+        const preview = raw.slice(0, 200)
+        const tail = raw.slice(-200)
+        throw new Error(
+          `JSON パース失敗（修復不能）: ${String(finalErr)}\n先頭200文字: ${preview}\n末尾200文字: ${tail}`
+        )
+      }
+    }
+  }
 }
 
 function toArray<T>(v: unknown): T[] {
@@ -357,11 +423,159 @@ export async function synthesizeProjectAnalysisWithClaude(
   const tokens_used =
     (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
 
+  // extractJson は trailing comma 除去・truncation repair 済みの文字列を返す
   const jsonStr = extractJson(raw_text)
   const parsed: unknown = JSON.parse(jsonStr)
   const result = validateSynthesisResult(parsed)
 
   return { result, raw_text, tokens_used }
+}
+
+// ---------------------------------------------------------------------------
+// Fallback synthesis — Claude API 失敗時にチャンク集計から最低限の結果を生成
+// ---------------------------------------------------------------------------
+
+/**
+ * Claude synthesis が失敗した場合に、集計済みチャンクデータから
+ * marketing_insights / lp_suggestions / ad_copy_suggestions / content_ideas /
+ * demand_points / occasion_insights / avoid_appeals を生成する。
+ */
+export function buildFallbackSynthesisResult(
+  aggregated: AggregatedAxes
+): SynthesisOutput['result'] {
+  const rp = aggregated.rating_points.slice(0, 3)
+  const cp = aggregated.complaints.slice(0, 3)
+  const pr = aggregated.purchase_reasons.slice(0, 3)
+  const ct = aggregated.customer_types.slice(0, 3)
+  const aw = aggregated.appeal_words.slice(0, 5)
+
+  // marketing_insights: complaints / purchase_reasons から生成
+  const marketing_insights: MarketingInsight[] = [
+    ...cp.slice(0, 2).map((c): MarketingInsight => ({
+      insight: `「${c.label}」への不満が ${c.count} 件確認されている`,
+      rationale: 'この不満はLP・FAQ で事前に払拭しなければ購入後の低評価につながる',
+      priority: 'high',
+      suggested_action: `LP の FAQ セクションに「${c.label}」への対応策を明示する`,
+    })),
+    ...pr.slice(0, 1).map((r): MarketingInsight => ({
+      insight: `購入理由「${r.label}」が ${r.count} 件確認されている`,
+      rationale: 'この購入動機をファーストビューで訴求することでコンバージョンが向上する',
+      priority: 'medium',
+      suggested_action: `LP ヘッドラインに「${r.label}」を反映した訴求を追加する`,
+    })),
+  ].slice(0, 3)
+
+  // lp_suggestions: complaints / rating_points から生成
+  const lp_suggestions: LpSuggestion[] = [
+    ...rp.slice(0, 2).map((r): LpSuggestion => ({
+      section: 'ファーストビュー',
+      headline: r.copyworthy_phrases?.[0] ?? r.label,
+      body: `${r.label}を支持するレビューが ${r.count} 件集まっています。`,
+      evidence: r.examples?.[0] ?? '',
+    })),
+    ...cp.slice(0, 1).map((c): LpSuggestion => ({
+      section: 'FAQ',
+      headline: `よくあるご不安: ${c.label}`,
+      body: c.faq_suggestion || `${c.label}についてよくご質問いただきますが、詳しくご説明します。`,
+      evidence: c.examples?.[0] ?? '',
+    })),
+  ].slice(0, 3)
+
+  // ad_copy_suggestions: appeal_words / purchase_reasons から生成
+  const platforms = ['Instagram', 'Meta', 'Google検索']
+  const ad_copy_suggestions: AdCopySuggestion[] = [
+    ...aw.slice(0, 2).map((w, i): AdCopySuggestion => ({
+      platform: platforms[i] ?? 'Instagram',
+      headline: w.word,
+      body: `${w.context || w.word}を実感した方が多数います。`,
+      cta: '詳しく見る',
+      target_persona: ct[0]?.label ?? '購入検討中のユーザー',
+    })),
+    ...pr.slice(0, 1).map((_r): AdCopySuggestion => ({
+      platform: platforms[2] ?? 'Google検索',
+      headline: aw[0]?.word ?? rp[0]?.label ?? '',
+      body: `${pr[0]?.label ?? ''}が決め手という声が多数。`,
+      cta: '公式サイトへ',
+      target_persona: ct[0]?.label ?? '購入検討中のユーザー',
+    })),
+  ].slice(0, 3)
+
+  // content_ideas: customer_types / purchase_reasons から生成
+  const formats = ['Instagram投稿', 'ブログ記事', 'リール']
+  const content_ideas: ContentIdea[] = [
+    ...ct.slice(0, 2).map((c, i): ContentIdea => ({
+      format: formats[i] ?? 'Instagram投稿',
+      title: `${c.label}に刺さる使い方`,
+      angle: `${c.description || c.label}向けの体験談`,
+      key_message: c.ad_targeting_hint || `${c.label}のリアルな声`,
+    })),
+    ...pr.slice(0, 1).map((_r): ContentIdea => ({
+      format: formats[2] ?? 'リール',
+      title: `選ばれる理由 TOP3`,
+      angle: '購入理由ランキング形式で信頼感を醸成',
+      key_message: pr[0]?.label ?? '選ばれ続ける理由',
+    })),
+  ].slice(0, 3)
+
+  // demand_points: rating_points / purchase_reasons から生成
+  const demand_points: DemandPoint[] = [
+    ...rp.slice(0, 2).map((r): DemandPoint => ({
+      label: r.label,
+      count: r.count,
+      description: `評価ポイントとして ${r.count} 件のレビューで言及されている`,
+      evidence_examples: r.examples?.slice(0, 1) ?? [],
+      marketing_use: `LP のベネフィットセクションで「${r.label}」を強調する`,
+    })),
+    ...pr.slice(0, 1).map((r): DemandPoint => ({
+      label: r.label,
+      count: r.count,
+      description: r.surface_reason || `購入理由として ${r.count} 件に言及がある`,
+      evidence_examples: r.examples?.slice(0, 1) ?? [],
+      marketing_use: `ファーストビューの訴求軸に採用する`,
+    })),
+  ].slice(0, 3)
+
+  // occasion_insights: purchase_reasons / customer_types から生成
+  const occasion_insights: OccasionInsight[] = [
+    ...pr.slice(0, 2).map((r): OccasionInsight => ({
+      occasion: `${r.label}を意識した時`,
+      trigger: r.surface_reason || r.label,
+      customer_state: r.deep_psychology || '変化を求めている',
+      recommended_message: r.label,
+      evidence_examples: r.examples?.slice(0, 1) ?? [],
+    })),
+    ...ct.slice(0, 1).map((c): OccasionInsight => ({
+      occasion: `${c.label}が商品を探しているとき`,
+      trigger: c.description || c.label,
+      customer_state: '解決策を求めている',
+      recommended_message: c.ad_targeting_hint || `${c.label}向けの商品です`,
+      evidence_examples: [],
+    })),
+  ].slice(0, 3)
+
+  // avoid_appeals: complaints から生成
+  const avoid_appeals: AvoidAppeal[] = cp.slice(0, 2).map((c): AvoidAppeal => ({
+    appeal: `${c.label}を完全に解消できると謳う訴求`,
+    reason: `レビューで「${c.label}」への不満が ${c.count} 件確認されており、過度な期待を持たせると返品・低評価につながる`,
+    risk: '購入後の期待外れが低評価レビューの増加を招く',
+    replacement_message: c.lp_counter_suggestion || `${c.label}については個人差があることを明示する`,
+  }))
+
+  const summary = `【fallback】チャンク分析完了。統合分析は自動生成されています。
+評価ポイント: ${rp.map((r) => r.label).join('・') || 'なし'}。
+主要不満: ${cp.map((c) => c.label).join('・') || 'なし'}。
+再分析を実行するか、管理者にお知らせください。`
+
+  return {
+    summary,
+    marketing_insights,
+    lp_suggestions,
+    ad_copy_suggestions,
+    content_ideas,
+    demand_points,
+    occasion_insights,
+    avoid_appeals,
+  }
 }
 
 // ---------------------------------------------------------------------------

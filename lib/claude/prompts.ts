@@ -183,25 +183,42 @@ export function buildSynthesisPrompt(
   const useCaseLines = tmpl.marketingUseCases.map((u) => `  - ${u}`).join('\n')
 
   return `あなたはECブランドのCMO（最高マーケティング責任者）です。
-以下の分析データをもとに、**次に取るべきマーケティング施策**を提案してください。
+以下の分析データをもとに、次に取るべきマーケティング施策をJSONで出力してください。
 
-## 絶対に守るべき出力ルール
+## JSON出力の厳守ルール（最重要）
+- 出力はJSON オブジェクト1つだけ。前後に説明文・コードフェンス・markdown は一切不要
+- trailing comma（配列・オブジェクトの最後の要素の後のカンマ）は禁止
+- 文字列内で改行コードを使わない（改行が必要な場合は \\n ではなく句読点で区切る）
+- 文字列内でダブルクォートを使う場合は \\\" とエスケープする
+- 各配列はちょうど指定件数（下記参照）で出力する。それ以上でも以下でもない
+- すべて日本語で出力する
 
-### marketing_insights の構成（必須）
-各示唆は「観察 → 解釈 → 推奨アクション」の3段構造で記述する:
-- insight（観察）: レビューデータから読み取れる客観的な事実・傾向
-- rationale（解釈）: その事実がマーケティング上なぜ重要か・何を意味するか
-- suggested_action（推奨アクション）: 具体的にどのLP要素・広告クリエイティブ・施策を変えるべきか（「LP の○○セクションを△△に変更する」レベルまで具体化）
+## 各フィールドの文字数制限（超過禁止）
+- summary: 300文字以内
+- marketing_insights[].insight: 120文字以内
+- marketing_insights[].rationale: 120文字以内
+- marketing_insights[].suggested_action: 160文字以内
+- lp_suggestions[].headline: 30文字以内
+- lp_suggestions[].body: 160文字以内
+- lp_suggestions[].evidence: 80文字以内
+- ad_copy_suggestions[].headline: 30文字以内
+- ad_copy_suggestions[].body: 120文字以内
+- ad_copy_suggestions[].target_persona: 60文字以内
+- content_ideas[].angle: 120文字以内
+- demand_points[].description: 100文字以内
+- demand_points[].marketing_use: 80文字以内
+- occasion_insights[].recommended_message: 30文字以内
+- avoid_appeals[].reason: 100文字以内
+- avoid_appeals[].risk: 80文字以内
+- avoid_appeals[].replacement_message: 60文字以内
 
-### 全体のトーン
-- 「〜と思われます」「〜かもしれません」などの曖昧な表現は禁止
-- マーケティング責任者として断言する姿勢で書く
-- 「分析結果の羅列」ではなく「クライアントへの提案書」として書く
+## marketing_insights の構成
+各示唆は「観察 → 解釈 → 推奨アクション」の3段構造で記述する。
+「〜と思われます」などの曖昧な表現は禁止。CMOとして断言する。
 
 ## 業界・ユースケース（${tmpl.label}）
-この分析の主なマーケティング活用場面:
 ${useCaseLines}
-**注意: レビュー本文に根拠がない内容は推測しないこと。**
+注意: レビュー本文に根拠がない内容は推測しないこと。
 
 ## 商品情報
 商品名: ${productName}
@@ -210,100 +227,61 @@ ${productDescription ? `補足: ${productDescription}` : ''}
 ## 各チャンクの主要な洞察
 ${summaryText}
 
-## 集計済み分析データ（全レビューを統合したもの）
+## 集計済み分析データ
 
-### 評価ポイント（強み）—— LP・広告の訴求軸候補
-${JSON.stringify(aggregated.rating_points.slice(0, 5), null, 2)}
+評価ポイント（上位5件）:
+${aggregated.rating_points.slice(0, 5).map((r, i) => `${i + 1}. ${r.label}（${r.count}件）`).join('\n')}
 
-### 不満点 —— FAQ・訴求改善の優先課題
-${JSON.stringify(aggregated.complaints.slice(0, 5), null, 2)}
+不満点（上位5件）:
+${aggregated.complaints.slice(0, 5).map((c, i) => `${i + 1}. ${c.label}（${c.count}件）`).join('\n')}
 
-### 購買理由 —— 深層心理に響く訴求の根拠
-${JSON.stringify(aggregated.purchase_reasons.slice(0, 5), null, 2)}
+購買理由（上位5件）:
+${aggregated.purchase_reasons.slice(0, 5).map((r, i) => `${i + 1}. ${r.label}（${r.count}件）`).join('\n')}
 
-### 顧客タイプ —— 広告ターゲティングの軸
-${JSON.stringify(aggregated.customer_types.slice(0, 3), null, 2)}
+顧客タイプ（上位3件）:
+${aggregated.customer_types.slice(0, 3).map((t, i) => `${i + 1}. ${t.label}（${t.count}件）`).join('\n')}
 
-### 上位訴求ワード —— コピーライティングの素材
-${JSON.stringify(aggregated.appeal_words.slice(0, 10), null, 2)}
+訴求ワード（上位8件）:
+${aggregated.appeal_words.slice(0, 8).map((w, i) => `${i + 1}. ${w.word}（スコア${w.score}）`).join('\n')}
 
-## 出力形式
-以下のJSON形式のみで回答してください。それ以外のテキストは一切出力しないでください。
-
-\`\`\`json
+## 出力JSON（このオブジェクトのみを出力すること）
 {
-  "summary": "全レビューを通じて見えてきた最重要洞察（3〜5文。「レビューには○○が多い」という要約は禁止。「このブランドが今すぐやるべきことは○○だ。なぜなら○○だからだ。」というCMOとしての提言として書く）",
+  "summary": "300文字以内のCMO提言（レビュー要約禁止。今すぐやるべきことを断言する）",
   "marketing_insights": [
-    {
-      "insight": "【観察】レビューデータから読み取れる客観的な事実・傾向（具体的な数値・割合を含めると良い）",
-      "rationale": "【解釈】この事実がマーケティング上なぜ重要か・放置するとどうなるか・活用するとどうなるか",
-      "priority": "high（今すぐ着手） / medium（次フェーズ） / low（中長期検討）",
-      "suggested_action": "【推奨アクション】具体的な施策（例: 「LPのファーストビューのヘッドラインを『1週間で肌のカサつきが消えた』に変更する」「Instagram広告のクリエイティブに敏感肌30代女性をモデルにした before/after を追加する」）"
-    }
+    {"insight": "観察（120文字以内）", "rationale": "解釈（120文字以内）", "priority": "high", "suggested_action": "具体的な施策（160文字以内）"},
+    {"insight": "観察（120文字以内）", "rationale": "解釈（120文字以内）", "priority": "medium", "suggested_action": "具体的な施策（160文字以内）"},
+    {"insight": "観察（120文字以内）", "rationale": "解釈（120文字以内）", "priority": "low", "suggested_action": "具体的な施策（160文字以内）"}
   ],
   "lp_suggestions": [
-    {
-      "section": "LPのセクション名（例: ファーストビュー・ベネフィット・使い方・FAQ・お客様の声・比較表）",
-      "headline": "このセクションの推奨ヘッドライン（顧客の原文フレーズを活かす・30文字以内）",
-      "body": "このセクションの推奨ボディコピー（顧客の言葉・感情に寄せる・具体的に・100〜200字）",
-      "evidence": "この提案の根拠となったレビューの傾向・具体的なフレーズ"
-    }
+    {"section": "ファーストビュー", "headline": "30文字以内", "body": "160文字以内", "evidence": "80文字以内"},
+    {"section": "FAQ", "headline": "30文字以内", "body": "160文字以内", "evidence": "80文字以内"},
+    {"section": "お客様の声", "headline": "30文字以内", "body": "160文字以内", "evidence": "80文字以内"}
   ],
   "ad_copy_suggestions": [
-    {
-      "platform": "媒体（Instagram / Meta / Google検索 / YouTube / LINE / TikTok のいずれか。重複禁止）",
-      "headline": "広告ヘッドライン（顧客の言葉を活かす・媒体の文字数制限を意識する・30文字以内）",
-      "body": "広告ボディコピー（顧客の感情・深層心理に寄せる・具体的な体験を想起させる・80〜150字）",
-      "cta": "CTA文言（例: 今すぐ試す・初回限定で試してみる・詳しく見る・公式サイトへ）",
-      "target_persona": "このコピーが最も刺さる顧客タイプ（具体的に：例「敏感肌で何度もコスメを試してきた30代女性」）"
-    }
+    {"platform": "Instagram", "headline": "30文字以内", "body": "120文字以内", "cta": "今すぐ試す", "target_persona": "60文字以内"},
+    {"platform": "Meta", "headline": "30文字以内", "body": "120文字以内", "cta": "詳しく見る", "target_persona": "60文字以内"},
+    {"platform": "Google検索", "headline": "30文字以内", "body": "120文字以内", "cta": "公式サイトへ", "target_persona": "60文字以内"}
   ],
   "content_ideas": [
-    {
-      "format": "コンテンツ形式（Instagram投稿 / ブログ記事 / YouTube動画 / リール / メルマガ / TikTok のいずれか）",
-      "title": "コンテンツタイトル案（読まれる・シェアされる具体的なタイトル）",
-      "angle": "切り口・アングル（なぜ読まれるか・なぜシェアされるか・どの顧客の悩みを刺激するか）",
-      "key_message": "このコンテンツが最終的に伝えるべきコアメッセージ（購買につながる1文）"
-    }
+    {"format": "Instagram投稿", "title": "タイトル案", "angle": "120文字以内", "key_message": "1文"},
+    {"format": "ブログ記事", "title": "タイトル案", "angle": "120文字以内", "key_message": "1文"},
+    {"format": "リール", "title": "タイトル案", "angle": "120文字以内", "key_message": "1文"}
   ],
   "demand_points": [
-    {
-      "label": "顧客が購買前に強く求めていた機能・属性の名称（例: 低刺激・無香料・速乾性）",
-      "count": 0,
-      "description": "このDemandPointの背景・文脈（例: どんな悩みを持つ顧客が何を期待して購入したか）",
-      "evidence_examples": ["レビューから抽出した具体的な証拠フレーズ（1〜3個）"],
-      "marketing_use": "LP・広告でのこのDemandPointの活用法（例: ファーストビューの訴求軸にする・仕様比較表に明示する）"
-    }
+    {"label": "機能・属性名", "count": 0, "description": "100文字以内", "evidence_examples": ["証拠フレーズ1件"], "marketing_use": "80文字以内"},
+    {"label": "機能・属性名", "count": 0, "description": "100文字以内", "evidence_examples": ["証拠フレーズ1件"], "marketing_use": "80文字以内"},
+    {"label": "機能・属性名", "count": 0, "description": "100文字以内", "evidence_examples": ["証拠フレーズ1件"], "marketing_use": "80文字以内"}
   ],
   "occasion_insights": [
-    {
-      "occasion": "商品を思い出す・欲しくなる具体的な生活シーン（例: 朝の洗顔後・デート前夜・肌荒れがひどい週）",
-      "trigger": "そのシーンを発生させる具体的なトリガー（例: 鏡で肌荒れを見た瞬間・友人の「最近肌きれいだね」の一言）",
-      "customer_state": "シーン発生時の顧客の心理・感情状態（例: 焦り・期待・自信喪失・変化したい気持ち）",
-      "recommended_message": "このシーンで最も刺さる訴求メッセージ（15〜30文字の広告ヘッドライン候補）",
-      "evidence_examples": ["そのシーンを示唆するレビューフレーズ（1〜2個）"]
-    }
+    {"occasion": "生活シーン", "trigger": "トリガー", "customer_state": "心理状態", "recommended_message": "30文字以内", "evidence_examples": ["フレーズ1件"]},
+    {"occasion": "生活シーン", "trigger": "トリガー", "customer_state": "心理状態", "recommended_message": "30文字以内", "evidence_examples": ["フレーズ1件"]},
+    {"occasion": "生活シーン", "trigger": "トリガー", "customer_state": "心理状態", "recommended_message": "30文字以内", "evidence_examples": ["フレーズ1件"]}
   ],
   "avoid_appeals": [
-    {
-      "appeal": "避けるべき訴求の具体的な内容（例: 「翌日から効果実感」「敏感肌でも絶対大丈夫」）",
-      "reason": "なぜこの訴求が逆効果か（レビューの証拠に基づく根拠）",
-      "risk": "この訴求を使った場合の具体的なリスク（例: 期待値過多による返品増加・低評価レビュー集中）",
-      "replacement_message": "代わりに使うべき正直で刺さる代替訴求（例: 「1週間後から変化を感じる人が多数」）"
-    }
+    {"appeal": "NG訴求内容", "reason": "100文字以内", "risk": "80文字以内", "replacement_message": "60文字以内"},
+    {"appeal": "NG訴求内容", "reason": "100文字以内", "risk": "80文字以内", "replacement_message": "60文字以内"}
   ]
-}
-\`\`\`
-
-注意事項:
-- marketing_insights は3〜5件（priority: high を必ず1件以上含める）
-- lp_suggestions は3〜5件（ファーストビューを必ず含める）
-- ad_copy_suggestions は3〜5件（プラットフォームが重複しないこと）
-- content_ideas は3〜5件（フォーマットが重複しないこと）
-- demand_points は3〜5件（購買前の「これが欲しかった」ポイントを抽出すること）
-- occasion_insights は3〜5件（実際の生活シーンに根ざした具体的な場面を抽出すること）
-- avoid_appeals は2〜4件（誇張・誤解を招くと思われる訴求を必ず1件以上含めること）
-- すべて日本語で出力すること`
+}`
 }
 
 // ---------------------------------------------------------------------------
