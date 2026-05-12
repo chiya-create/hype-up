@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils'
 interface ExportActionsProps {
   projectId: string
   hasAnalysis?: boolean
+  /** レポートページ上で使う場合は true にする（同一ページへの循環リンクを非表示）*/
+  hideReportLink?: boolean
 }
 
 const EXPORT_TYPES = [
@@ -24,7 +26,7 @@ const EXPORT_TYPES = [
   { type: 'content_ideas', label: 'コンテンツアイデア' },
 ] as const
 
-export function ExportActions({ projectId, hasAnalysis = true }: ExportActionsProps) {
+export function ExportActions({ projectId, hasAnalysis = true, hideReportLink = false }: ExportActionsProps) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -77,14 +79,22 @@ export function ExportActions({ projectId, hasAnalysis = true }: ExportActionsPr
         )}
       </div>
 
-      {/* レポート出力 */}
-      <Link
-        href={`/projects/${projectId}/report`}
-        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
-      >
-        <FileText className="h-3.5 w-3.5" />
-        レポート出力
-      </Link>
+      {/* レポート出力 — レポートページ上では循環リンクになるため非表示 */}
+      {!hideReportLink && (
+        <Link
+          href={`/projects/${projectId}/report`}
+          className={cn(
+            buttonVariants({ variant: 'outline', size: 'sm' }),
+            'gap-1.5',
+            !hasAnalysis && 'pointer-events-none opacity-50',
+          )}
+          aria-disabled={!hasAnalysis}
+          tabIndex={!hasAnalysis ? -1 : undefined}
+        >
+          <FileText className="h-3.5 w-3.5" />
+          レポート出力
+        </Link>
+      )}
     </div>
   )
 }

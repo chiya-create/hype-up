@@ -165,7 +165,7 @@ export default async function ReportPage({
               1枚サマリー
             </Link>
             <PrintButton />
-            <ExportActions projectId={id} hasAnalysis />
+            <ExportActions projectId={id} hasAnalysis hideReportLink />
             <MarkdownExportButton
               project={projectMeta}
               analysis={analysis}

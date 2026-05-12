@@ -118,10 +118,43 @@ function truncateSentenceForPpt(text: string | null | undefined, max: number): s
 }
 
 /**
- * Returns the action text for a MarketingInsight, sentence-truncated to 80 chars.
+ * Converts a long action sentence into a short PPTX-safe title (max 45 chars).
+ *
+ * Strategy:
+ *  1. Strip common verbose starters (まず/LP/SNS etc.)
+ *  2. Try to extract the core "〇〇を動詞" verb phrase
+ *  3. Fall back to sentence-boundary truncation at 45 chars
+ *
+ * Examples:
+ *   "LP・広告の主軸訴求を「翌朝すっきり」にリライトする" → "主軸訴求を変更する"
+ *   "FAQセクションに香り・効果・肌質への回答を追加する" → "FAQに回答を追加する"
+ */
+function actionTitleForPpt(text: string | null | undefined): string {
+  if (!text) return ''
+
+  // 1. Strip verbose starters
+  const stripped = text
+    .replace(/^(?:まず|まずは|早急に|すぐに|今すぐ|直ちに)[、。\s]*/u, '')
+    .replace(/^(?:LP[・]?|SNS[・]?|EC[・]?|Web[・]?|広告[・]?|サイト[・]?)/u, '')
+    .trim() || text
+
+  // 2. Try to extract "X を/に [verb]" near the sentence core
+  const verbPat = /([^\s。、！？]{2,14}[をに][^\s。、！？]{2,10}(?:する|変更|追加|修正|改善|作成|導入|明記|設計|強化|拡充|最適化|見直し|整備|切り替え|実施|展開|更新|表示|活用|採用|訴求|削除)(?:する)?)/u
+  const m = stripped.match(verbPat)
+  if (m && m[1].length >= 5 && m[1].length <= 32) {
+    return m[1]
+  }
+
+  // 3. Sentence-boundary truncation at 45 chars
+  return truncateSentenceForPpt(stripped, 45)
+}
+
+/**
+ * Returns the action text for a MarketingInsight as a short PPTX title.
+ * @deprecated use actionTitleForPpt instead
  */
 function compactActionText(insight: MarketingInsight): string {
-  return truncateSentenceForPpt(insight.suggested_action || insight.insight, 80)
+  return actionTitleForPpt(insight.suggested_action || insight.insight)
 }
 
 // Numbered list:  "1.  item\n2.  item"
@@ -163,7 +196,8 @@ interface CardOpts {
   labelEn: string   // e.g. "WINNING MESSAGE"
   labelJa: string   // e.g. "使うべき言葉"
   content: string
-  lineSpacing?: number  // lineSpacingMultiple; default 1.45
+  lineSpacing?: number   // lineSpacingMultiple; default 1.45
+  bodyFontSize?: number  // content font size in pt; default FS.BODY (10)
 }
 
 /** Colored card with left accent bar, section label, separator line, content */
@@ -200,7 +234,7 @@ function addCard(pres: PptxGenJS, slide: PptxGenJS.Slide, opts: CardOpts) {
   // Content body
   slide.addText(opts.content, {
     x: x + PAD, y: y + 0.45, w: w - PAD * 2, h: h - 0.60,
-    fontSize: FS.BODY, color: C.BODY,
+    fontSize: opts.bodyFontSize ?? FS.BODY, color: C.BODY,
     valign: 'top', wrap: true, lineSpacingMultiple: opts.lineSpacing ?? 1.45,
   })
 }
@@ -233,7 +267,7 @@ function addConclusionCard(
     fill: { color: C.CONC_LINE },
     line: { color: C.CONC_LINE, width: 0 },
   })
-  slide.addText(truncateSentenceForPpt(text, 180), {
+  slide.addText(truncateSentenceForPpt(text, 130), {
     x: M + PAD, y: y + 0.45, w: W - M * 2 - PAD * 2, h: h - 0.55,
     fontSize: FS.BODY, color: C.BODY,
     valign: 'top', wrap: true, lineSpacingMultiple: 1.45,
@@ -354,10 +388,10 @@ export async function generateProjectOnePagerPptx(
     .slice(0, 3)
     .map((c) => `${trunc(c.label, 38)}（${c.count}件）`)
 
-  // NEXT ACTIONS: high priority first, then medium — sentence-boundary truncated to 80 chars
+  // NEXT ACTIONS: high priority first, then medium — short action titles ≤45 chars
   const actionItems = [
-    ...highInsights.slice(0, 3).map((i) => compactActionText(i)),
-    ...midInsights.slice(0, 2).map((i) => compactActionText(i)),
+    ...highInsights.slice(0, 3).map((i) => actionTitleForPpt(i.suggested_action || i.insight)),
+    ...midInsights.slice(0, 2).map((i) => actionTitleForPpt(i.suggested_action || i.insight)),
   ]
 
   // ── Layout geometry ──────────────────────────────────────────────────────────
@@ -395,8 +429,9 @@ export async function generateProjectOnePagerPptx(
     x: M, y: ACT_Y, w: W - M * 2, h: ACT_H,
     bg: C.ACT_BG, accent: C.ACT_TITLE, lineColor: C.ACT_LINE,
     labelEn: 'NEXT ACTIONS', labelJa: '次に取るべき打ち手',
-    content: nList(actionItems, 3, 200),  // items already sentence-truncated to 80 chars
-    lineSpacing: 1.25,
+    content: nList(actionItems, 3, 200),  // items already action-title-truncated to 45 chars
+    lineSpacing: 1.20,
+    bodyFontSize: 9,
   })
 
   addFooter(pres, slide, 'レビュー分析結果に基づく初期提案資料', FTR_Y)
