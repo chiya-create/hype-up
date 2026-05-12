@@ -121,19 +121,38 @@ function truncateSentenceForPpt(text: string | null | undefined, max: number): s
   return candidate.slice(0, max - 1) + '…'
 }
 
+// ---------------------------------------------------------------------------
+// PPTX 統一テキスト helper — 文節境界カット、末尾 …
+// ---------------------------------------------------------------------------
+
+/** 施策タイトル用: 最大28文字（Slide 2 カード見出し） */
+function pptTitle(text: string | null | undefined, max = 28): string {
+  return truncateSentenceForPpt(text, max)
+}
+/** 1行ラベル用: 最大45文字（Slide 3 evidence 各行） */
+function pptLine(text: string | null | undefined, max = 45): string {
+  return truncateSentenceForPpt(text, max)
+}
+/** 短い説明用: 最大70文字（Slide 2 やること） */
+function pptNote(text: string | null | undefined, max = 70): string {
+  return truncateSentenceForPpt(text, max)
+}
+/** サマリー用: 最大110文字（Slide 1 Conclusion） */
+function pptSummary(text: string | null | undefined, max = 110): string {
+  return truncateSentenceForPpt(text, max)
+}
+
 /**
- * Converts a long action sentence into a short PPTX-safe title (max 45 chars).
+ * Converts a long action sentence into a short PPTX-safe title.
+ *
+ * @param max - character limit (default 35 for Slide 1, pass 28 for Slide 2)
  *
  * Strategy:
- *  1. Strip common verbose starters (まず/LP/SNS etc.)
- *  2. Try to extract the core "〇〇を動詞" verb phrase
- *  3. Fall back to sentence-boundary truncation at 45 chars
- *
- * Examples:
- *   "LP・広告の主軸訴求を「翌朝すっきり」にリライトする" → "主軸訴求を変更する"
- *   "FAQセクションに香り・効果・肌質への回答を追加する" → "FAQに回答を追加する"
+ *  1. Strip verbose starters (まず/LP/SNS etc.)
+ *  2. Extract the core "〇〇を動詞" verb phrase
+ *  3. Sentence-boundary truncation at `max` chars
  */
-function actionTitleForPpt(text: string | null | undefined): string {
+function actionTitleForPpt(text: string | null | undefined, max = 35): string {
   if (!text) return ''
 
   // 1. Strip verbose starters
@@ -145,20 +164,12 @@ function actionTitleForPpt(text: string | null | undefined): string {
   // 2. Try to extract "X を/に [verb]" near the sentence core
   const verbPat = /([^\s。、！？]{2,14}[をに][^\s。、！？]{2,10}(?:する|変更|追加|修正|改善|作成|導入|明記|設計|強化|拡充|最適化|見直し|整備|切り替え|実施|展開|更新|表示|活用|採用|訴求|削除)(?:する)?)/u
   const m = stripped.match(verbPat)
-  if (m && m[1].length >= 5 && m[1].length <= 32) {
+  if (m && m[1].length >= 5 && m[1].length <= max) {
     return m[1]
   }
 
-  // 3. Sentence-boundary truncation at 45 chars
-  return truncateSentenceForPpt(stripped, 45)
-}
-
-/**
- * Returns the action text for a MarketingInsight as a short PPTX title.
- * @deprecated use actionTitleForPpt instead
- */
-function compactActionText(insight: MarketingInsight): string {
-  return actionTitleForPpt(insight.suggested_action || insight.insight)
+  // 3. Sentence-boundary truncation
+  return truncateSentenceForPpt(stripped, max)
 }
 
 // Numbered list:  "1.  item\n2.  item"
@@ -271,10 +282,10 @@ function addConclusionCard(
     fill: { color: C.CONC_LINE },
     line: { color: C.CONC_LINE, width: 0 },
   })
-  slide.addText(truncateSentenceForPpt(text, 130), {
-    x: M + PAD, y: y + 0.45, w: W - M * 2 - PAD * 2, h: h - 0.55,
+  slide.addText(pptSummary(text), {
+    x: M + PAD, y: y + 0.45, w: W - M * 2 - PAD * 2, h: h - 0.50,
     fontSize: FS.BODY, color: C.BODY,
-    valign: 'top', wrap: true, lineSpacingMultiple: 1.45,
+    valign: 'top', wrap: true, lineSpacingMultiple: 1.30,
   })
 }
 
@@ -343,7 +354,11 @@ function addFooter(
 
 /**
  * Detailed action card for Slide 2 — Recommended Actions.
- * Shows: index label / short title / priority badge / action detail / rationale.
+ *
+ * Text budget per card (total ≤ 160 chars, safely fits in any column width):
+ *   title    ≤ 28 chars  (pptTitle)
+ *   action   ≤ 70 chars  (pptNote)
+ *   rationale ≤ 60 chars (pptLine × ~1.3)
  */
 function addActionDetailCard(
   pres: PptxGenJS,
@@ -351,13 +366,18 @@ function addActionDetailCard(
   opts: {
     x: number; y: number; w: number; h: number
     index: number
-    title: string          // short action title (actionTitleForPpt output)
-    action: string         // suggested_action or insight
-    rationale: string      // rationale
+    title: string
+    action: string
+    rationale: string
     priority: 'high' | 'medium' | 'low'
   }
 ) {
-  const { x, y, w, h, index, title, action, rationale, priority } = opts
+  const { x, y, w, h, index, priority } = opts
+  // Apply character limits at render time
+  const title    = pptTitle(opts.title)      // ≤28 chars
+  const action   = pptNote(opts.action)      // ≤70 chars
+  const rationale = pptLine(opts.rationale, 60)  // ≤60 chars
+
   const PRI_COLOR = priority === 'high' ? 'DC2626' : priority === 'medium' ? 'D97706' : '6B7280'
   const PRI_LABEL = priority === 'high' ? '● 優先度: HIGH' : priority === 'medium' ? '● 優先度: MEDIUM' : '● 優先度: LOW'
 
@@ -385,25 +405,25 @@ function addActionDetailCard(
     line: { color: C.ACT_LINE, width: 0 },
   })
 
-  // -- Content block (starts at y + 0.45) --------------------------------
-  const CX  = x + PAD
-  const CW  = w - PAD * 2
-  let  CY   = y + 0.48
+  // -- Content (y + 0.48 〜) -----------------------------------------------
+  const CX = x + PAD
+  const CW = w - PAD * 2
+  let CY   = y + 0.48
 
-  // Short title (bold 11pt, up to 2 lines)
+  // Title — 1行（max 28文字 → 11pt で必ず1行に収まる）
   slide.addText(title, {
-    x: CX, y: CY, w: CW, h: 0.55,
+    x: CX, y: CY, w: CW, h: 0.38,
     fontSize: 11, bold: true, color: C.BODY,
-    valign: 'top', wrap: true, lineSpacingMultiple: 1.25,
+    valign: 'middle', wrap: false,  // wrap=false で強制1行
   })
-  CY += 0.58
+  CY += 0.42
 
   // Priority badge
   slide.addText(PRI_LABEL, {
     x: CX, y: CY, w: CW, h: 0.20,
     fontSize: 7.5, bold: true, color: PRI_COLOR,
   })
-  CY += 0.24
+  CY += 0.26
 
   // Thin rule
   slide.addShape(pres.ShapeType.rect, {
@@ -411,36 +431,37 @@ function addActionDetailCard(
     fill: { color: C.ACT_LINE },
     line: { color: C.ACT_LINE, width: 0 },
   })
-  CY += 0.12
+  CY += 0.14
 
-  // Label "具体的にやること"
-  slide.addText('■ 具体的にやること', {
+  // Label "やること"
+  slide.addText('■ やること', {
     x: CX, y: CY, w: CW, h: 0.18,
     fontSize: 7, bold: true, color: '64748B',
   })
-  CY += 0.20
+  CY += 0.21
 
-  // Action text (9pt, wraps)
-  slide.addText(truncateSentenceForPpt(action, 130), {
-    x: CX, y: CY, w: CW, h: 1.55,
+  // Action text — max 70文字 → 9pt, 最大2行
+  slide.addText(action, {
+    x: CX, y: CY, w: CW, h: 0.60,
     fontSize: 9, color: C.BODY,
-    valign: 'top', wrap: true, lineSpacingMultiple: 1.35,
+    valign: 'top', wrap: true, lineSpacingMultiple: 1.30,
   })
-  CY += 1.60
+  CY += 0.66
 
   // Label "根拠"
-  slide.addText('■ 根拠・インサイト', {
+  slide.addText('■ 根拠', {
     x: CX, y: CY, w: CW, h: 0.18,
     fontSize: 7, bold: true, color: '64748B',
   })
-  CY += 0.20
+  CY += 0.21
 
-  // Rationale text (9pt, wraps)
-  slide.addText(truncateSentenceForPpt(rationale, 120), {
-    x: CX, y: CY, w: CW, h: 1.55,
+  // Rationale text — max 60文字 → 9pt, 最大2行
+  slide.addText(rationale, {
+    x: CX, y: CY, w: CW, h: 0.55,
     fontSize: 9, color: C.BODY,
-    valign: 'top', wrap: true, lineSpacingMultiple: 1.35,
+    valign: 'top', wrap: true, lineSpacingMultiple: 1.30,
   })
+  // CY ends at ~y + 3.13, card is y + h. Remaining space is visual padding.
 }
 
 // =============================================================================
@@ -492,18 +513,20 @@ function buildSlide1(
   const midInsights   = insights.filter((i) => i.priority === 'medium')
 
   const winItems: string[] = [
-    ...appealWords.slice(0, 3).map((w) => `${w.word}（スコア ${w.score}pt）`),
-    ...(lpSuggestions[0] ? [`[LP] ${trunc(lpSuggestions[0].headline, 40)}`] : []),
-    ...(adCopies[0] ? [`[${adCopies[0].platform}] ${trunc(adCopies[0].headline, 36)}`] : []),
+    ...appealWords.slice(0, 3).map((w) => `${w.word}（${w.score}pt）`),
+    ...(lpSuggestions[0] ? [`[LP] ${pptTitle(lpSuggestions[0].headline, 32)}`] : []),
+    ...(adCopies[0] ? [`[${adCopies[0].platform}] ${pptTitle(adCopies[0].headline, 28)}`] : []),
   ]
-  const issueItems = complaints.slice(0, 3).map((c) => `${trunc(c.label, 38)}（${c.count}件）`)
+  const issueItems = complaints
+    .slice(0, 3)
+    .map((c) => `${pptTitle(c.label, 30)}（${c.count}件）`)
+
+  // NEXT ACTIONS — max 35文字タイトルのみ（補足なし）
   const actionItems = [
-    ...highInsights.slice(0, 3).map((i) => actionTitleForPpt(i.suggested_action || i.insight)),
-    ...midInsights.slice(0, 2).map((i) => actionTitleForPpt(i.suggested_action || i.insight)),
+    ...highInsights.slice(0, 3).map((i) => actionTitleForPpt(i.suggested_action || i.insight, 35)),
+    ...midInsights.slice(0, 2).map((i) => actionTitleForPpt(i.suggested_action || i.insight, 35)),
   ]
-  // Append hint that slide 2 has details
-  const actionContent =
-    nList(actionItems, 3, 200) + '\n\n（詳細・根拠 → Slide 2）'
+  const actionContent = nList(actionItems, 3, 200)
 
   // ── Layout ────────────────────────────────────────────────────────────────
   //  Header  y=0.00  h=0.65
@@ -566,36 +589,42 @@ function buildSlide2(
   const midInsights  = insights.filter((i) => i.priority === 'medium')
   // Up to 3 actions: high first, then medium
   const actions = [...highInsights, ...midInsights].slice(0, 3)
+  const n = actions.length
 
-  // ── Layout ────────────────────────────────────────────────────────────────
+  // ── Layout: 1件→中央1列 / 2件→2列 / 3件→3列 ─────────────────────────────
   //  Header  y=0.00  h=0.65
-  //  Cards   y=0.75  h=5.90  (3 equal columns)
+  //  Cards   y=0.75  h=5.90
   //  Footer  y=6.75
-  const CARD_Y = 0.65 + GAP               // 0.75
+  const CARD_Y = 0.65 + GAP    // 0.75
   const CARD_H = 5.90
-  const CARD_W = (W - M * 2 - GAP * 2) / 3  // ≈ 4.21"
-  const FTR_Y  = CARD_Y + CARD_H + GAP   // 6.75
+  const FTR_Y  = CARD_Y + CARD_H + GAP  // 6.75
 
-  // Placeholder card when fewer than 3 actions exist
-  const noActionContent = '（データなし）'
+  if (n === 0) {
+    // No action data — show a single empty card
+    addCard(pres, slide, {
+      x: M, y: CARD_Y, w: W - M * 2, h: CARD_H,
+      bg: C.ACT_BG, accent: C.ACT_TITLE, lineColor: C.ACT_LINE,
+      labelEn: 'NEXT ACTIONS', labelJa: '推奨施策',
+      content: '（推奨施策のデータがありません）',
+    })
+  } else {
+    // Card width depends on number of actions
+    const totalGap = (n - 1) * GAP
+    const CARD_W = n === 1
+      ? W * 0.55                              // 1件: 55%幅・中央寄せ
+      : (W - M * 2 - totalGap) / n           // 2/3件: 等分
 
-  for (let i = 0; i < 3; i++) {
-    const ins = actions[i]
-    const cx  = M + i * (CARD_W + GAP)
+    const startX = n === 1
+      ? (W - CARD_W) / 2                     // 1件: 中央
+      : M                                     // 2/3件: 左端から
 
-    if (!ins) {
-      // Empty placeholder
-      addCard(pres, slide, {
-        x: cx, y: CARD_Y, w: CARD_W, h: CARD_H,
-        bg: C.ACT_BG, accent: C.ACT_TITLE, lineColor: C.ACT_LINE,
-        labelEn: `ACTION ${i + 1}`, labelJa: '推奨施策',
-        content: noActionContent,
-      })
-    } else {
+    for (let i = 0; i < n; i++) {
+      const ins = actions[i]
+      const cx  = startX + i * (CARD_W + GAP)
       addActionDetailCard(pres, slide, {
         x: cx, y: CARD_Y, w: CARD_W, h: CARD_H,
         index: i + 1,
-        title: actionTitleForPpt(ins.suggested_action || ins.insight),
+        title: actionTitleForPpt(ins.suggested_action || ins.insight, 28),
         action: ins.suggested_action || ins.insight,
         rationale: ins.rationale,
         priority: ins.priority,
@@ -628,47 +657,47 @@ function buildSlide3(
   const avoidAppeals    = (analysis.avoid_appeals    ?? []) as AvoidAppeal[]
 
   // ── Content builders ──────────────────────────────────────────────────────
+  // PPTXは提案サマリー。長文補足（FAQ・深層心理・フレーズ）は表示しない。
+  // 詳細はWebレポート側に任せる。
 
-  // Rating points: "1. label（N件）\n   フレーズ"
+  // Rating points: "1. label（N件）" — label+count のみ
   const ratingContent = ratingPoints.length === 0
     ? '（データなし）'
-    : ratingPoints.slice(0, 3).map((rp, i) => {
-        const phrase = rp.copyworthy_phrases[0] ?? rp.examples[0] ?? ''
-        return `${i + 1}.  ${trunc(rp.label, 25)}（${rp.count}件）` +
-          (phrase ? `\n    "${trunc(phrase, 28)}"` : '')
-      }).join('\n')
+    : ratingPoints.slice(0, 3)
+        .map((rp, i) => `${i + 1}.  ${pptLine(rp.label, 30)}（${rp.count}件）`)
+        .join('\n')
 
-  // Complaints: "1. label（N件）\n   FAQ案"
+  // Complaints: "1. label（N件）" — label+count のみ
   const complaintContent = complaints.length === 0
     ? '（データなし）'
-    : complaints.slice(0, 3).map((c, i) =>
-        `${i + 1}.  ${trunc(c.label, 24)}（${c.count}件）` +
-        (c.faq_suggestion ? `\n    FAQ: ${trunc(c.faq_suggestion, 30)}` : '')
-      ).join('\n')
+    : complaints.slice(0, 3)
+        .map((c, i) => `${i + 1}.  ${pptLine(c.label, 28)}（${c.count}件）`)
+        .join('\n')
 
-  // Purchase reasons: "1. label\n   深層: deep_psychology"
+  // Purchase reasons: "1. label（N件）" — label+count のみ
   const purchaseContent = purchaseReasons.length === 0
     ? '（データなし）'
-    : purchaseReasons.slice(0, 3).map((pr, i) =>
-        `${i + 1}.  ${trunc(pr.label, 25)}` +
-        (pr.deep_psychology ? `\n    深層: ${trunc(pr.deep_psychology, 32)}` : '')
-      ).join('\n')
+    : purchaseReasons.slice(0, 3)
+        .map((pr, i) => `${i + 1}.  ${pptLine(pr.label, 28)}（${pr.count}件）`)
+        .join('\n')
 
-  // Occasion insights: "1. occasion\n   → recommended_message"
+  // Occasion insights: "1. occasion  →  message" — 各1行・計45文字以内
   const occasionContent = occasionInsights.length === 0
     ? '（データなし）'
-    : occasionInsights.slice(0, 3).map((oi, i) =>
-        `${i + 1}.  ${trunc(oi.occasion, 30)}` +
-        (oi.recommended_message ? `\n    → ${trunc(oi.recommended_message, 40)}` : '')
-      ).join('\n')
+    : occasionInsights.slice(0, 3).map((oi, i) => {
+        const occ = pptLine(oi.occasion, 18)
+        const msg = oi.recommended_message ? `  →  ${pptLine(oi.recommended_message, 22)}` : ''
+        return `${i + 1}.  ${occ}${msg}`
+      }).join('\n')
 
-  // Avoid appeals: "✗ appeal\n   代替: replacement"
+  // Avoid appeals: "✗ appeal  →  replacement" — 各1行・計45文字以内
   const avoidContent = avoidAppeals.length === 0
     ? '（データなし）'
-    : avoidAppeals.slice(0, 2).map((aa) =>
-        `✗  ${trunc(aa.appeal, 28)}` +
-        (aa.replacement_message ? `\n    代替: ${trunc(aa.replacement_message, 35)}` : '')
-      ).join('\n')
+    : avoidAppeals.slice(0, 2).map((aa) => {
+        const ap  = pptLine(aa.appeal, 18)
+        const rep = aa.replacement_message ? `  →  ${pptLine(aa.replacement_message, 22)}` : ''
+        return `✗  ${ap}${rep}`
+      }).join('\n')
 
   // ── Layout ────────────────────────────────────────────────────────────────
   //  Header  y=0.00  h=0.65
