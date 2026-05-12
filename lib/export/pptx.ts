@@ -172,6 +172,39 @@ function actionTitleForPpt(text: string | null | undefined, max = 35): string {
   return truncateSentenceForPpt(stripped, max)
 }
 
+// ---------------------------------------------------------------------------
+// Infer missing fields from MarketingInsight content
+// ---------------------------------------------------------------------------
+
+/** 期待効果をキーワードから推定 */
+function inferImpact(ins: MarketingInsight): string {
+  const t = `${ins.suggested_action} ${ins.insight}`.toLowerCase()
+  if (/cvr|転換率|購入率|コンバージョン/.test(t))   return 'CVR改善'
+  if (/離脱|直帰/.test(t))                          return '離脱率低下'
+  if (/不安|faq|解消|払拭|疑問|不信/.test(t))       return '購入前不安の解消'
+  if (/低評価|返品|クレーム|ネガ/.test(t))           return '低評価レビュー抑制'
+  if (/リピート|定期|継続|ltr|ロイヤル/.test(t))    return 'リピート率向上'
+  if (/広告|cpa|cpc|roas/.test(t))                  return '広告CPA改善'
+  if (/lp|訴求|ヘッドライン|コピー|ランディング/.test(t)) return 'LP訴求力向上'
+  if (/sns|認知|シェア|拡散/.test(t))               return '認知・シェア拡大'
+  if (/単価|アップ|クロスセル|追加/.test(t))        return '客単価向上'
+  return '顧客満足度・CVR向上'
+}
+
+/** 反映先をキーワードから推定（最大3タグ / で区切り） */
+function inferDestination(ins: MarketingInsight): string {
+  const t = `${ins.suggested_action} ${ins.insight}`.toLowerCase()
+  const dests: string[] = []
+  if (/lp|ランディング/.test(t))              dests.push('LP')
+  if (/広告|ad|meta|google|yahoo/.test(t))   dests.push('広告')
+  if (/faq|よくある|q&a/.test(t))             dests.push('FAQ')
+  if (/商品ページ|詳細ページ|pdp/.test(t))    dests.push('商品ページ')
+  if (/メール|crm|mail|ステップ/.test(t))      dests.push('メールCRM')
+  if (/sns|twitter|instagram|tiktok/.test(t)) dests.push('SNS')
+  if (dests.length === 0) { dests.push('LP', '広告') }
+  return dests.slice(0, 3).join('  /  ')
+}
+
 // Numbered list:  "1.  item\n2.  item"
 function nList(items: string[], max: number, truncAt: number): string {
   if (items.length === 0) return '（該当データなし）'
@@ -353,115 +386,147 @@ function addFooter(
 }
 
 /**
- * Detailed action card for Slide 2 — Recommended Actions.
+ * Slide 2/3/4 — Recommended Action (1 action per slide, 2-column layout)
  *
- * Text budget per card (total ≤ 160 chars, safely fits in any column width):
- *   title    ≤ 28 chars  (pptTitle)
- *   action   ≤ 70 chars  (pptNote)
- *   rationale ≤ 60 chars (pptLine × ~1.3)
+ * Layout (LAYOUT_WIDE 13.33" × 7.5"):
+ *   Left panel  x=0.25  w=3.80  — タイトル / 優先度 / 反映先
+ *   Right col   x=4.15  w=8.93  — やること / 根拠 / 期待効果（3枚縦積み）
+ *
+ * Character budgets (safely fits at 10pt on given widths):
+ *   title       ≤ 40 chars  left panel (19 chars/line × 2 lines)
+ *   action      ≤ 160 chars right card (62 chars/line × ~2.5 lines)
+ *   rationale   ≤ 140 chars right card
+ *   impact      ≤ 120 chars right card
  */
-function addActionDetailCard(
+function buildActionSlide(
   pres: PptxGenJS,
-  slide: PptxGenJS.Slide,
-  opts: {
-    x: number; y: number; w: number; h: number
-    index: number
-    title: string
-    action: string
-    rationale: string
-    priority: 'high' | 'medium' | 'low'
-  }
+  project: ProjectData,
+  ins: MarketingInsight,
+  actionIndex: number,   // 1-based
+  slideNum: string,      // e.g. "2 / 5"
+  industryLabel: string,
 ) {
-  const { x, y, w, h, index, priority } = opts
-  // Apply character limits at render time
-  const title    = pptTitle(opts.title)      // ≤28 chars
-  const action   = pptNote(opts.action)      // ≤70 chars
-  const rationale = pptLine(opts.rationale, 60)  // ≤60 chars
+  const slide = pres.addSlide()
+  slide.background = { color: 'FFFFFF' }
 
-  const PRI_COLOR = priority === 'high' ? 'DC2626' : priority === 'medium' ? 'D97706' : '6B7280'
-  const PRI_LABEL = priority === 'high' ? '● 優先度: HIGH' : priority === 'medium' ? '● 優先度: MEDIUM' : '● 優先度: LOW'
+  addHeader(
+    pres, slide,
+    `推奨施策 ${actionIndex}  —  Recommended Action`,
+    projectMetaLines(project, industryLabel),
+  )
 
-  // Card background + border
+  // ── Geometry ─────────────────────────────────────────────────────────────
+  const PANEL_Y  = 0.65 + GAP           // 0.75
+  const PANEL_H  = 5.90
+  const LEFT_W   = 3.80
+  const RIGHT_X  = M + LEFT_W + GAP     // 4.15
+  const RIGHT_W  = W - M * 2 - LEFT_W - GAP  // 8.93
+  const CARD_H   = (PANEL_H - GAP * 2) / 3   // 1.90"
+  const FTR_Y    = PANEL_Y + PANEL_H + GAP   // 6.75
+
+  // ── Priority helpers ─────────────────────────────────────────────────────
+  const PRI_COLOR = ins.priority === 'high' ? 'DC2626' : ins.priority === 'medium' ? 'D97706' : '6B7280'
+  const PRI_LABEL = ins.priority === 'high' ? '● 優先度: HIGH' : ins.priority === 'medium' ? '● 優先度: MEDIUM' : '● 優先度: LOW'
+
+  // ── LEFT PANEL ────────────────────────────────────────────────────────────
+  const LCX = M + PAD
+  const LCW = LEFT_W - PAD * 2
+
   slide.addShape(pres.ShapeType.rect, {
-    x, y, w, h,
+    x: M, y: PANEL_Y, w: LEFT_W, h: PANEL_H,
     fill: { color: C.ACT_BG },
     line: { color: C.ACT_LINE, width: 0.75 },
   })
-  // Left accent bar
   slide.addShape(pres.ShapeType.rect, {
-    x, y, w: 0.05, h,
+    x: M, y: PANEL_Y, w: 0.05, h: PANEL_H,
     fill: { color: C.ACT_TITLE },
     line: { color: C.ACT_TITLE, width: 0 },
   })
-  // Section label "ACTION 1  推奨施策"
-  slide.addText(`ACTION ${index}  推奨施策`, {
-    x: x + PAD, y: y + 0.11, w: w - PAD * 2, h: 0.22,
+  // Label row
+  slide.addText(`ACTION ${actionIndex}  推奨施策`, {
+    x: LCX, y: PANEL_Y + 0.11, w: LCW, h: 0.22,
     fontSize: FS.LABEL, bold: true, color: C.ACT_TITLE, charSpacing: 0.5,
   })
   // Separator
   slide.addShape(pres.ShapeType.rect, {
-    x: x + PAD, y: y + 0.37, w: w - PAD * 2, h: 0.007,
+    x: LCX, y: PANEL_Y + 0.37, w: LCW, h: 0.007,
     fill: { color: C.ACT_LINE },
     line: { color: C.ACT_LINE, width: 0 },
   })
 
-  // -- Content (y + 0.48 〜) -----------------------------------------------
-  const CX = x + PAD
-  const CW = w - PAD * 2
-  let CY   = y + 0.48
+  let CY = PANEL_Y + 0.50
 
-  // Title — 1行（max 28文字 → 11pt で必ず1行に収まる）
-  slide.addText(title, {
-    x: CX, y: CY, w: CW, h: 0.38,
-    fontSize: 11, bold: true, color: C.BODY,
-    valign: 'middle', wrap: false,  // wrap=false で強制1行
+  // Title — ≤40 chars, 13pt bold, wraps to ~2 lines
+  slide.addText(truncateSentenceForPpt(actionTitleForPpt(ins.suggested_action || ins.insight, 40), 40), {
+    x: LCX, y: CY, w: LCW, h: 0.80,
+    fontSize: 13, bold: true, color: C.BODY,
+    valign: 'top', wrap: true, lineSpacingMultiple: 1.30,
   })
-  CY += 0.42
+  CY += 0.85
 
   // Priority badge
   slide.addText(PRI_LABEL, {
-    x: CX, y: CY, w: CW, h: 0.20,
-    fontSize: 7.5, bold: true, color: PRI_COLOR,
+    x: LCX, y: CY, w: LCW, h: 0.22,
+    fontSize: 8, bold: true, color: PRI_COLOR,
   })
-  CY += 0.26
+  CY += 0.28
 
-  // Thin rule
+  // Thin divider
   slide.addShape(pres.ShapeType.rect, {
-    x: CX, y: CY, w: CW, h: 0.005,
+    x: LCX, y: CY, w: LCW, h: 0.005,
     fill: { color: C.ACT_LINE },
     line: { color: C.ACT_LINE, width: 0 },
   })
-  CY += 0.14
+  CY += 0.16
 
-  // Label "やること"
-  slide.addText('■ やること', {
-    x: CX, y: CY, w: CW, h: 0.18,
+  // "反映先" label
+  slide.addText('■ 反映先', {
+    x: LCX, y: CY, w: LCW, h: 0.18,
     fontSize: 7, bold: true, color: '64748B',
   })
-  CY += 0.21
+  CY += 0.22
 
-  // Action text — max 70文字 → 9pt, 最大2行
-  slide.addText(action, {
-    x: CX, y: CY, w: CW, h: 0.60,
-    fontSize: 9, color: C.BODY,
-    valign: 'top', wrap: true, lineSpacingMultiple: 1.30,
+  // Destination tags (e.g. "LP  /  広告  /  FAQ")
+  slide.addText(inferDestination(ins), {
+    x: LCX, y: CY, w: LCW, h: 0.38,
+    fontSize: 9.5, color: C.BODY,
+    valign: 'top', wrap: true, lineSpacingMultiple: 1.25,
   })
-  CY += 0.66
 
-  // Label "根拠"
-  slide.addText('■ 根拠', {
-    x: CX, y: CY, w: CW, h: 0.18,
-    fontSize: 7, bold: true, color: '64748B',
-  })
-  CY += 0.21
+  // ── RIGHT COLUMN — 3 stacked cards ───────────────────────────────────────
+  const impact = inferImpact(ins)
 
-  // Rationale text — max 60文字 → 9pt, 最大2行
-  slide.addText(rationale, {
-    x: CX, y: CY, w: CW, h: 0.55,
-    fontSize: 9, color: C.BODY,
-    valign: 'top', wrap: true, lineSpacingMultiple: 1.30,
+  // Card 1: やること — blue theme
+  addCard(pres, slide, {
+    x: RIGHT_X, y: PANEL_Y,
+    w: RIGHT_W,  h: CARD_H,
+    bg: 'EFF6FF', accent: '1D4ED8', lineColor: 'BFDBFE',
+    labelEn: 'ACTION', labelJa: '具体的にやること',
+    content: truncateSentenceForPpt(ins.suggested_action || ins.insight, 160),
+    bodyFontSize: 10, lineSpacing: 1.35,
   })
-  // CY ends at ~y + 3.13, card is y + h. Remaining space is visual padding.
+
+  // Card 2: 根拠・インサイト — standard card
+  addCard(pres, slide, {
+    x: RIGHT_X, y: PANEL_Y + CARD_H + GAP,
+    w: RIGHT_W,  h: CARD_H,
+    bg: 'F8FAFC', accent: '475569', lineColor: 'CBD5E1',
+    labelEn: 'RATIONALE', labelJa: '根拠・インサイト',
+    content: truncateSentenceForPpt(ins.rationale, 140),
+    bodyFontSize: 10, lineSpacing: 1.35,
+  })
+
+  // Card 3: 期待効果 — green theme
+  addCard(pres, slide, {
+    x: RIGHT_X, y: PANEL_Y + (CARD_H + GAP) * 2,
+    w: RIGHT_W,  h: CARD_H,
+    bg: C.WIN_BG, accent: C.WIN_TITLE, lineColor: C.WIN_LINE,
+    labelEn: 'EXPECTED IMPACT', labelJa: '期待効果',
+    content: truncateSentenceForPpt(impact, 120),
+    bodyFontSize: 10, lineSpacing: 1.35,
+  })
+
+  addFooter(pres, slide, 'レビュー分析結果に基づく初期提案資料', FTR_Y, slideNum)
 }
 
 // =============================================================================
@@ -497,6 +562,7 @@ function buildSlide1(
   project: ProjectData,
   analysis: ProjectAnalysis,
   industryLabel: string,
+  slideNum: string,
 ) {
   const slide = pres.addSlide()
   slide.background = { color: 'FFFFFF' }
@@ -566,77 +632,11 @@ function buildSlide1(
     bodyFontSize: 9,
   })
 
-  addFooter(pres, slide, 'レビュー分析結果に基づく初期提案資料', FTR_Y, '1 / 3')
+  addFooter(pres, slide, 'レビュー分析結果に基づく初期提案資料', FTR_Y, slideNum)
 }
 
 // ---------------------------------------------------------------------------
-// Slide 2 — Recommended Actions
-// ---------------------------------------------------------------------------
-
-function buildSlide2(
-  pres: PptxGenJS,
-  project: ProjectData,
-  analysis: ProjectAnalysis,
-  industryLabel: string,
-) {
-  const slide = pres.addSlide()
-  slide.background = { color: 'FFFFFF' }
-
-  addHeader(pres, slide, '推奨施策  —  Recommended Actions', projectMetaLines(project, industryLabel))
-
-  const insights     = (analysis.marketing_insights ?? []) as MarketingInsight[]
-  const highInsights = insights.filter((i) => i.priority === 'high')
-  const midInsights  = insights.filter((i) => i.priority === 'medium')
-  // Up to 3 actions: high first, then medium
-  const actions = [...highInsights, ...midInsights].slice(0, 3)
-  const n = actions.length
-
-  // ── Layout: 1件→中央1列 / 2件→2列 / 3件→3列 ─────────────────────────────
-  //  Header  y=0.00  h=0.65
-  //  Cards   y=0.75  h=5.90
-  //  Footer  y=6.75
-  const CARD_Y = 0.65 + GAP    // 0.75
-  const CARD_H = 5.90
-  const FTR_Y  = CARD_Y + CARD_H + GAP  // 6.75
-
-  if (n === 0) {
-    // No action data — show a single empty card
-    addCard(pres, slide, {
-      x: M, y: CARD_Y, w: W - M * 2, h: CARD_H,
-      bg: C.ACT_BG, accent: C.ACT_TITLE, lineColor: C.ACT_LINE,
-      labelEn: 'NEXT ACTIONS', labelJa: '推奨施策',
-      content: '（推奨施策のデータがありません）',
-    })
-  } else {
-    // Card width depends on number of actions
-    const totalGap = (n - 1) * GAP
-    const CARD_W = n === 1
-      ? W * 0.55                              // 1件: 55%幅・中央寄せ
-      : (W - M * 2 - totalGap) / n           // 2/3件: 等分
-
-    const startX = n === 1
-      ? (W - CARD_W) / 2                     // 1件: 中央
-      : M                                     // 2/3件: 左端から
-
-    for (let i = 0; i < n; i++) {
-      const ins = actions[i]
-      const cx  = startX + i * (CARD_W + GAP)
-      addActionDetailCard(pres, slide, {
-        x: cx, y: CARD_Y, w: CARD_W, h: CARD_H,
-        index: i + 1,
-        title: actionTitleForPpt(ins.suggested_action || ins.insight, 28),
-        action: ins.suggested_action || ins.insight,
-        rationale: ins.rationale,
-        priority: ins.priority,
-      })
-    }
-  }
-
-  addFooter(pres, slide, 'レビュー分析結果に基づく初期提案資料', FTR_Y, '2 / 3')
-}
-
-// ---------------------------------------------------------------------------
-// Slide 3 — Evidence / Customer Insights
+// Slide (last) — Evidence / Customer Insights
 // ---------------------------------------------------------------------------
 
 function buildSlide3(
@@ -644,6 +644,7 @@ function buildSlide3(
   project: ProjectData,
   analysis: ProjectAnalysis,
   industryLabel: string,
+  slideNum: string,
 ) {
   const slide = pres.addSlide()
   slide.background = { color: 'FFFFFF' }
@@ -752,7 +753,7 @@ function buildSlide3(
     bodyFontSize: 8.5, lineSpacing: 1.30,
   })
 
-  addFooter(pres, slide, 'レビュー分析結果に基づく初期提案資料', FTR_Y, '3 / 3')
+  addFooter(pres, slide, 'レビュー分析結果に基づく初期提案資料', FTR_Y, slideNum)
 }
 
 // ---------------------------------------------------------------------------
@@ -770,9 +771,20 @@ export async function generateProjectOnePagerPptx(
     INDUSTRY_TEMPLATES[(project.industry ?? 'general') as IndustryId]?.label ??
     project.industry ?? '—'
 
-  buildSlide1(pres, project, analysis, industryLabel)
-  buildSlide2(pres, project, analysis, industryLabel)
-  buildSlide3(pres, project, analysis, industryLabel)
+  // Sort insights high→medium→low, take up to 3 for action slides
+  const allInsights = (analysis.marketing_insights ?? []) as MarketingInsight[]
+  const sortedInsights = [...allInsights].sort((a, b) => {
+    const ord: Record<string, number> = { high: 0, medium: 1, low: 2 }
+    return (ord[a.priority] ?? 1) - (ord[b.priority] ?? 1)
+  })
+  const actions = sortedInsights.slice(0, 3)
+  const total = 2 + actions.length  // Slide 1 + action slides + Evidence
+
+  buildSlide1(pres, project, analysis, industryLabel, `1 / ${total}`)
+  actions.forEach((ins, i) => {
+    buildActionSlide(pres, project, ins, i + 1, `${i + 2} / ${total}`, industryLabel)
+  })
+  buildSlide3(pres, project, analysis, industryLabel, `${total} / ${total}`)
 
   const buf = await pres.write({ outputType: 'nodebuffer' })
   return buf as unknown as Buffer
