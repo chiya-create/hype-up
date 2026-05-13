@@ -52,7 +52,7 @@ export function CompareRunButton({ projectIds }: CompareRunButtonProps) {
         className="gap-2"
       >
         <Sparkles className="h-4 w-4" />
-        {loading ? 'Claude AI が比較分析中...' : '比較分析を実行（Claude AI）'}
+        {loading ? 'Hype Up AI が比較分析中...' : '比較分析を実行（Hype Up AI）'}
       </Button>
       {loading && (
         <p className="text-xs text-muted-foreground">

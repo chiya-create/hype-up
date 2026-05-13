@@ -243,7 +243,7 @@ export default async function CompareResultPage({
         <Card className="border-primary/20">
           <CardContent className="pt-6 space-y-3">
             <div className="space-y-1">
-              <p className="text-sm font-semibold">Claude AI による比較分析</p>
+              <p className="text-sm font-semibold">Hype Up AI による比較分析</p>
               <p className="text-xs text-muted-foreground">
                 上記のデータをもとに、各プロジェクトの勝ち筋・弱み・市場共通の不満・推奨アクションを生成します。
               </p>

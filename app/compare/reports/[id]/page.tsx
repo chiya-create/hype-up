@@ -7,6 +7,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ComparisonReport } from '@/components/compare/ComparisonReport'
 import { PrintButton } from '@/components/print/PrintButton'
+import { ComparisonPptxExportButton } from '@/components/compare/ComparisonPptxExportButton'
 import { PrintableHeader } from '@/components/print/PrintableHeader'
 import { FeedbackForm } from '@/components/feedback/FeedbackForm'
 import { getIndustryLabel } from '@/lib/constants'
@@ -121,7 +122,8 @@ export default async function CompareReportPage({
                 使用トークン: {report.token_used.toLocaleString()}
               </span>
             )}
-            <div className="ml-auto no-print">
+            <div className="ml-auto no-print flex items-center gap-2">
+              <ComparisonPptxExportButton reportId={id} />
               <PrintButton />
             </div>
           </div>
