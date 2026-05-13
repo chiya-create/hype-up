@@ -221,7 +221,7 @@ export default async function ProjectDetailPage({
         </div>
 
         {/* 分析ステータスカード（チャンクが1件以上あるとき） */}
-        {chunkList.length > 0 && (
+        {isAdmin && chunkList.length > 0 && (
           <AnalysisStatusCard
             chunks={chunkList.map((c) => ({ status: c.status as ChunkStatus }))}
             totalTokensUsed={analysis?.total_tokens_used ?? null}
@@ -230,7 +230,7 @@ export default async function ProjectDetailPage({
         )}
 
         {/* 品質チェック */}
-        {analysis && <QualityCheckCard analysis={analysis} projectId={id} />}
+        {isAdmin && analysis && <QualityCheckCard analysis={analysis} projectId={id} />}
 
         {/* エラーチャンク警告 */}
         {hasErrorChunks && (

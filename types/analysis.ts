@@ -291,6 +291,31 @@ export interface ProjectAnalysisResult {
   content_ideas: ContentIdea[]
   // 将来拡張用 (MVP では null)
   future_axes: FutureAxes | null
+  // Step 62: 3C分析
+  strategy_3c?: Strategy3C | null
+}
+
+// ---------------------------------------------------------------------------
+// Step 62: 3C分析 (Strategy3C)
+// ---------------------------------------------------------------------------
+
+/** 3C分析の1セクション（Customer / Competitor / Company / Winning Strategy） */
+export interface Strategy3CSection {
+  title: string
+  /** 1文サマリー */
+  summary: string
+  /** 箇条書きポイント（最大5件） */
+  bullets: string[]
+  /** 強調表示するキーメッセージ（省略可） */
+  key_message?: string
+}
+
+/** 3C分析全体 */
+export interface Strategy3C {
+  customer: Strategy3CSection
+  competitor: Strategy3CSection
+  company: Strategy3CSection
+  winning_strategy: Strategy3CSection
 }
 
 // ---------------------------------------------------------------------------
@@ -434,6 +459,8 @@ export interface ProjectAnalysis {
   ad_copy_suggestions: AdCopySuggestion[]
   content_ideas: ContentIdea[]
   future_axes: FutureAxes | null
+  // Step 62: 3C分析
+  strategy_3c?: Strategy3C | null
   total_tokens_used: number | null
   chunk_count: number
   raw_response: Record<string, unknown> | null

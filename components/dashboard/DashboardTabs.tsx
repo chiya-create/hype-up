@@ -7,6 +7,8 @@ import { ComplaintsChart } from '@/components/dashboard/ComplaintsChart'
 import { PurchaseReasonsChart } from '@/components/dashboard/PurchaseReasonsChart'
 import { CustomerTypesChart } from '@/components/dashboard/CustomerTypesChart'
 import { AppealWordsCloud } from '@/components/dashboard/AppealWordsCloud'
+import { Strategy3CCard } from '@/components/dashboard/Strategy3CCard'
+import { buildStrategy3C } from '@/lib/insights/strategy-3c'
 import type {
   ProjectAnalysis,
   RatingPoint,
@@ -14,6 +16,7 @@ import type {
   PurchaseReason,
   CustomerType,
   AppealWord,
+  Strategy3C,
 } from '@/types/analysis'
 
 interface DashboardTabsProps {
@@ -26,11 +29,13 @@ export function DashboardTabs({ analysis }: DashboardTabsProps) {
   const purchaseReasons = (analysis.purchase_reasons ?? []) as PurchaseReason[]
   const customerTypes = (analysis.customer_types ?? []) as CustomerType[]
   const appealWords = (analysis.appeal_words ?? []) as AppealWord[]
+  const strategy3c: Strategy3C = buildStrategy3C(analysis)
 
   return (
     <Tabs defaultValue="overview">
       <TabsList className="flex-wrap h-auto gap-1 mb-2">
         <TabsTrigger value="overview">概要</TabsTrigger>
+        <TabsTrigger value="strategy_3c">3C分析</TabsTrigger>
         <TabsTrigger value="rating_points">
           評価ポイント
           {ratingPoints.length > 0 && (
@@ -65,6 +70,10 @@ export function DashboardTabs({ analysis }: DashboardTabsProps) {
 
       <TabsContent value="overview">
         <AnalysisSummary analysis={analysis} />
+      </TabsContent>
+
+      <TabsContent value="strategy_3c">
+        <Strategy3CCard data={strategy3c} />
       </TabsContent>
 
       <TabsContent value="rating_points">
