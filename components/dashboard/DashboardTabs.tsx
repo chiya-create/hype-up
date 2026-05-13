@@ -8,6 +8,7 @@ import { PurchaseReasonsChart } from '@/components/dashboard/PurchaseReasonsChar
 import { CustomerTypesChart } from '@/components/dashboard/CustomerTypesChart'
 import { AppealWordsCloud } from '@/components/dashboard/AppealWordsCloud'
 import { Strategy3CCard } from '@/components/dashboard/Strategy3CCard'
+import { Strategy3CDiagram } from '@/components/dashboard/Strategy3CDiagram'
 import { buildStrategy3C } from '@/lib/insights/strategy-3c'
 import type { IndustryBenchmark } from '@/lib/insights/benchmark'
 import type {
@@ -77,7 +78,18 @@ export function DashboardTabs({ analysis, benchmark }: DashboardTabsProps) {
       </TabsContent>
 
       <TabsContent value="strategy_3c">
-        <Strategy3CCard data={strategy3c} />
+        <div className="space-y-10">
+          {/* 関係構造図: 直感理解用 */}
+          <Strategy3CDiagram data={strategy3c} />
+
+          {/* 詳細カード: 内容確認用 */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+              詳細カード
+            </p>
+            <Strategy3CCard data={strategy3c} />
+          </div>
+        </div>
       </TabsContent>
 
       <TabsContent value="rating_points">
