@@ -52,6 +52,7 @@ function cleanLabel(s: string | null | undefined, max = 20): string {
     .replace(/への$/g, '')
     .replace(/に対する.+$/g, '')
     .replace(/の(?:高さ|低さ|少なさ|多さ|悪さ|弱さ).*$/g, '')
+    .replace(/[へをにはがで]$/, '')   // 末尾に残った単独助詞を除去
     .trim()
   return hardCut(c || s, max)
 }
@@ -167,6 +168,43 @@ function categorizeAvoid(appeal: string): string {
 }
 
 /**
+ * complaint.label を自然な「悩み表現」に変換。
+ * "セルライト対策の即効性" → "即効性への期待"、"価格" → "価格不安" など。
+ */
+function naturalizeComplaint(label: string): string {
+  const PATTERNS: [RegExp, string][] = [
+    [/即効性|すぐ効|早く効/,               '即効性への期待'],
+    [/期待.*ギャップ|期待値|効果.*実感/,    '効果実感の遅さ'],
+    [/セルライト/,                         'セルライト改善'],
+    [/価格|値段|コスパ|高い|割高/,          '価格不安'],
+    [/むくみ|浮腫/,                        'むくみへの不満'],
+    [/乾燥|パサつき/,                      '乾燥・使用感'],
+    [/べたつき|ベタつき|ベタベタ/,          'べたつき感'],
+    [/匂い|臭い|香り/,                     '香り・使用感'],
+    [/容量|量.*少|サイズ/,                 '容量・コスパ'],
+    [/効果.*なし|変化.*なし|実感.*薄/,      '効果実感の薄さ'],
+    [/使い(?:づらい|にくい|方)/,           '使いやすさ'],
+    [/継続|続け/,                          '継続しやすさ'],
+  ]
+  for (const [pattern, result] of PATTERNS) {
+    if (pattern.test(label)) return result
+  }
+  return hardCut(cleanLabel(stripSubLabel(label), 12), 12)
+}
+
+/**
+ * "すっきり" "さっぱり" など感覚・体感ワードに「感」を付与して名詞化。
+ * 既に「感」で終わる場合は何もしない。
+ */
+function addKan(word: string): string {
+  if (!word || word.endsWith('感') || word.endsWith('効果') || word.endsWith('感覚')) return word
+  if (/すっきり|さっぱり|もちもち|しっとり|ふわふわ|なめらか|すべすべ|ぽかぽか|やわらか/.test(word)) {
+    return word + '感'
+  }
+  return word
+}
+
+/**
  * marketing_insights のテキストから反映チャネルを推定し、
  * "LP・広告を刷新" のような固定句を返す。
  */
@@ -199,8 +237,8 @@ function buildCustomer(analysis: ProjectAnalysis): Strategy3CSection {
     customerTypes[0]?.description ?? '',
   )
 
-  // 悩み：complaints.label を cleanLabel して2件まで結合
-  const complaintVals = complaints.slice(0, 3).map((c) => cleanLabel(c.label, 12))
+  // 悩み：naturalizeComplaint で自然な悩み表現に変換して2件まで結合
+  const complaintVals = complaints.slice(0, 3).map((c) => naturalizeComplaint(c.label))
   const complaintVal  = safeJoin(complaintVals, '・', 26)
 
   // 欲求：purchase_reasons.label を cleanLabel して2件まで
@@ -403,9 +441,16 @@ function buildWinningStrategy(analysis: ProjectAnalysis): Strategy3CSection {
 
   // --- summary: avoidL（カテゴリ名）と pushL（名詞形）を使った自然文 ---
   const avoidL = safeEmbed(categorizeAvoid(avoidAppeals[0]?.appeal ?? ''), 12)
-  // pushL: appeal_words から名詞形のものを優先探索
-  const pushLRaw = appealWords.map((w) => safeEmbedNoun(w.word, 12)).find((v) => v != null)
-    ?? (demandPoints[0]?.label ? safeEmbedNoun(cleanLabel(demandPoints[0].label, 12), 12) : null)
+  // pushL: appeal_words から名詞形を優先探索し、感覚ワードには「感」を付与
+  const pushLRaw = (() => {
+    const fromWords = appealWords
+      .map((w) => { const n = safeEmbedNoun(w.word, 12); return n ? addKan(n) : null })
+      .find((v) => v != null)
+    if (fromWords) return fromWords
+    return demandPoints[0]?.label
+      ? addKan(safeEmbedNoun(cleanLabel(demandPoints[0].label, 12), 12) ?? '')  || null
+      : null
+  })()
 
   // avoidL は categorizeAvoid 経由で既に "〜訴求" 形 → template に "訴求" を重ねない
   const summary = avoidL && pushLRaw
