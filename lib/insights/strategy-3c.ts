@@ -6,9 +6,9 @@
  *
  * 設計原則:
  *  - 省略記号「…」「...」を一切出さない
- *  - summary ≤ 60文字 / bullet value ≤ 30文字 / key_message ≤ 44文字
+ *  - テンプレート埋め込み前に safeEmbed() で助詞末チェック → NG なら固定フォールバック
+ *  - summary ≤ 60 / bullet value ≤ 30 / key_message ≤ 44
  *  - bullets: 各カード最大3件
- *  - cleanLabel() で助詞・冗長句を除去し自然な名詞句へ変換してから埋め込む
  */
 import type {
   ProjectAnalysis,
@@ -27,7 +27,7 @@ import type {
 import type { IndustryBenchmark } from './benchmark'
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// 内部ヘルパー
 // ---------------------------------------------------------------------------
 
 /** 省略記号なしハードカット */
@@ -37,36 +37,42 @@ function hardCut(s: string | null | undefined, max: number): string {
 }
 
 /**
- * ラベルから冗長な助詞・接続句を除去し、自然な短い名詞句にする。
- * 例:
- *   "セルライト対策としての即効性への期待値ギャップ" → "即効性への期待"
- *   "価格の高さと容量消費のバランス"               → "価格・容量"
- *   "30代産後女性"                                → "30代産後女性"（変化なし）
+ * ラベルから冗長な助詞・接続句を除去し、短い名詞句にする。
+ * 変換例:
+ *   "セルライト対策としての即効性への期待値ギャップ" → "セルライト対策の即効性"
+ *   "価格の高さと容量消費のバランス"               → "価格・容量消費"
+ *   "絶対大丈夫な安全性への訴求"                  → "絶対大丈夫な安全性"
  */
-function cleanLabel(s: string | null | undefined, max = 18): string {
+function cleanLabel(s: string | null | undefined, max = 20): string {
   if (!s) return ''
   let c = s
-    // 「〜としての」→「〜の」
     .replace(/としての/g, 'の')
-    // 「〜への期待値ギャップ/期待値/懸念」など → 「〜」
-    .replace(/の(?:期待値ギャップ|期待値|懸念|ギャップ|不満感).*$/, '')
-    // 「〜と〇〇のバランス」→「〜・〇〇」
+    .replace(/の(?:期待値ギャップ|期待値|懸念|ギャップ|不満感)/g, '')
     .replace(/と(\S+?)のバランス$/, '・$1')
-    // 「への」を「の」に（文末除く）
     .replace(/への(?=\S)/g, 'の')
-    // 文末「への」除去
-    .replace(/への$/, '')
-    // 「〜に対する」→ 後続を省略
-    .replace(/に対する.+$/, '')
-    // 「〜の高さ/少なさ/低さ」など → 「〜」
-    .replace(/の(?:高さ|低さ|少なさ|多さ|悪さ|弱さ).*$/, '')
+    .replace(/への$/g, '')
+    .replace(/に対する.+$/g, '')
+    .replace(/の(?:高さ|低さ|少なさ|多さ|悪さ|弱さ).*$/g, '')
     .trim()
   return hardCut(c || s, max)
 }
 
 /**
+ * 文章テンプレートへの埋め込みに安全かチェック。
+ * 末尾が助詞・な形・括弧類の場合は null を返す。
+ * 2文字未満 or max 超えも null。
+ */
+function safeEmbed(s: string | null | undefined, max = 14): string | null {
+  if (!s) return null
+  const c = hardCut(cleanLabel(s, max), max)
+  if (!c || c.length < 2) return null
+  if (/[をにはがでてもやとへのな・、。「」『』（）【】]$/.test(c)) return null
+  return c
+}
+
+/**
  * 複数要素を sep で結合し、max 文字以内に収まる範囲だけ結合（省略記号なし）。
- * 入力は cleanLabel() 済みの短いラベルを想定。
+ * 各要素は cleanLabel 済みの短いラベルを想定。
  */
 function safeJoin(items: string[], sep: string, max: number): string {
   const clean = items.filter(Boolean)
@@ -79,17 +85,27 @@ function safeJoin(items: string[], sep: string, max: number): string {
   return result.length > 0 ? result.join(sep) : hardCut(clean[0] ?? '', max)
 }
 
-/**
- * 「ラベル：値」形式の bullet 文字列を生成。
- * value は最大 maxVal 文字でハードカット。空なら null。
- */
-function bul(
-  label: string,
-  value: string | null | undefined,
-  maxVal = 30
-): string | null {
+/** 「ラベル：値」bullet。value が空なら null。value は maxVal 文字でハードカット。 */
+function bul(label: string, value: string | null | undefined, maxVal = 30): string | null {
   const v = hardCut(value, maxVal)
   return v ? `${label}：${v}` : null
+}
+
+/**
+ * marketing_insights のテキストから反映チャネルを推定し、
+ * "LP・広告を刷新" のような固定句を返す。
+ */
+function inferChannel(insights: MarketingInsight[]): string {
+  const text = insights.slice(0, 5)
+    .map((i) => `${i.suggested_action ?? ''} ${i.insight ?? ''}`)
+    .join(' ')
+  const parts: string[] = []
+  if (/LP|ランディング|ファーストビュー|商品ページ/.test(text)) parts.push('LP')
+  if (/広告|ad\b|Meta|Google|Yahoo|CPA|ROAS/i.test(text))    parts.push('広告')
+  if (/SNS|Instagram|Twitter|TikTok|リール/.test(text))       parts.push('SNS')
+  if (/FAQ|よくある質問|Q&A/i.test(text))                     parts.push('FAQ')
+  if (parts.length === 0) return 'LP・広告を刷新'
+  return parts.slice(0, 2).join('・') + 'を刷新'
 }
 
 // ---------------------------------------------------------------------------
@@ -103,18 +119,15 @@ function buildCustomer(analysis: ProjectAnalysis): Strategy3CSection {
   const complaints       = (analysis.complaints        ?? []) as Complaint[]
 
   // 顧客像：customer_types 上位1件のみ（重複連結防止）
-  const typeVal = cleanLabel(customerTypes[0]?.label, 24)
-
+  const typeVal = hardCut(cleanLabel(customerTypes[0]?.label, 24), 24)
   // 悩み：complaints.label を cleanLabel して2件まで結合
   const complaintVals = complaints.slice(0, 3).map((c) => cleanLabel(c.label, 12))
-  const complaintVal = safeJoin(complaintVals, '・', 28)
-
+  const complaintVal  = safeJoin(complaintVals, '・', 28)
   // 欲求：purchase_reasons.label を cleanLabel して2件まで
   const reasonVals = purchaseReasons.slice(0, 2).map((pr) => cleanLabel(pr.label, 14))
-  const reasonVal = safeJoin(reasonVals, '・', 28)
-
+  const reasonVal  = safeJoin(reasonVals, '・', 28)
   // 想起：occasion_insights.occasion 1件
-  const occasionVal = cleanLabel(occasionInsights[0]?.occasion, 22)
+  const occasionVal = hardCut(cleanLabel(occasionInsights[0]?.occasion, 22), 22)
 
   const bullets = [
     bul('顧客像', typeVal),
@@ -123,26 +136,29 @@ function buildCustomer(analysis: ProjectAnalysis): Strategy3CSection {
     bul('想起',   occasionVal),
   ].filter(Boolean).slice(0, 3) as string[]
 
-  // --- summary ≤ 60文字: 短いラベルで固定テンプレート ---
-  const tl = cleanLabel(customerTypes[0]?.label, 14)
-  const cl = cleanLabel(complaints[0]?.label, 14)
+  // --- summary: safeEmbed で安全確認してからテンプレートへ ---
+  const tl = safeEmbed(customerTypes[0]?.label,  13)
+  const cl = safeEmbed(complaints[0]?.label,      13)
   const summary = tl && cl
     ? `${tl}が、${cl}を気にしている`
     : tl
     ? `${tl}が主な顧客層`
-    : '顧客の特徴・ニーズを整理しています'
+    : complaintVal
+    ? `${hardCut(complaintVal, 20)}を気にする顧客が中心`
+    : '顧客の特徴・ニーズを整理しました'
 
-  // --- key_message ≤ 44文字 ---
-  const km = occasionInsights[0]?.occasion
-    ? `${cleanLabel(occasionInsights[0].occasion, 18)}のケア需要が強い`
-    : purchaseReasons[0]?.label
-    ? `${cleanLabel(purchaseReasons[0].label, 20)}が購入の決め手`
-    : undefined
-  const key_message = hardCut(km, 44) || undefined
+  // --- key_message ---
+  const kmOccasion = occasionInsights[0]?.occasion
+    ? `${hardCut(cleanLabel(occasionInsights[0].occasion, 16), 16)}のケア需要が強い`
+    : null
+  const kmReason = purchaseReasons[0]?.label
+    ? `${hardCut(cleanLabel(purchaseReasons[0].label, 18), 18)}が購入の決め手`
+    : null
+  const key_message = hardCut(kmOccasion ?? kmReason ?? undefined, 44) || undefined
 
   return {
-    title: 'Customer — 顧客',
-    summary: hardCut(summary, 60),
+    title:    'Customer — 顧客',
+    summary:  hardCut(summary, 60),
     bullets,
     key_message,
   }
@@ -163,25 +179,20 @@ function buildCompetitor(
   const generalVals = avoidAppeals.length
     ? avoidAppeals.slice(0, 3).map((aa) => cleanLabel(aa.appeal, 12))
     : (benchmark?.rating_points ?? []).slice(0, 3).map((r) => cleanLabel(r.label, 12))
-  const generalVal = safeJoin(generalVals, '・', 28)
+  const generalVal = safeJoin(generalVals, '・', 26)
 
-  // 比較軸：比較・価格系の complaints.label (短縮) 2件まで
-  const compRaw = complaints
+  // 比較軸：比較・価格系 complaints を cleanLabel して2件まで
+  const compSource = complaints
     .filter((c) => /価格|比較|期待|高い|安い|容量|品質/.test(c.label))
     .slice(0, 3)
   const compFallback = complaints.slice(0, 3)
-  const compSource = compRaw.length ? compRaw : compFallback
-  const compVals = compSource.map((c) => cleanLabel(c.label, 10))
+  const compVals = (compSource.length ? compSource : compFallback)
+    .map((c) => cleanLabel(c.label, 10))
   const compVal = safeJoin(compVals, '・', 26)
 
-  // 注意：avoid_appeals[0].risk/reason の先頭句
+  // 注意：avoid_appeals[0].risk/reason を直接 cleanLabel（句読点サーチをやめる）
   const cautionRaw = avoidAppeals[0]?.risk || avoidAppeals[0]?.reason || ''
-  const cautionEnd = Math.min(
-    cautionRaw.indexOf('、') > 0 ? cautionRaw.indexOf('、') : 999,
-    cautionRaw.indexOf('。') > 0 ? cautionRaw.indexOf('。') : 999,
-    18
-  )
-  const cautionVal = cautionRaw ? cleanLabel(cautionRaw.slice(0, cautionEnd), 20) : null
+  const cautionVal = cautionRaw ? hardCut(cleanLabel(cautionRaw, 20), 20) : null
 
   const bullets = [
     bul('一般化', generalVal),
@@ -189,24 +200,26 @@ function buildCompetitor(
     bul('注意',   cautionVal),
   ].filter(Boolean).slice(0, 3) as string[]
 
-  // --- summary ≤ 60文字 ---
-  const al = cleanLabel(avoidAppeals[0]?.appeal, 14)
-  const bl = cleanLabel(benchmark?.rating_points[0]?.label, 14)
+  // --- summary: safeEmbed で安全確認 ---
+  const al = safeEmbed(avoidAppeals[0]?.appeal,            14)
+  const bl = safeEmbed(benchmark?.rating_points[0]?.label, 14)
   const summary = al
     ? `${al}など一般化した訴求では差別化が難しい`
     : bl
     ? `${bl}では業界内で差別化が難しい`
-    : '競合・業界共通の訴求軸を整理しています'
+    : generalVal
+    ? `${hardCut(generalVal, 18)}訴求は一般化し、差別化しづらい`
+    : '競合・業界共通の訴求軸を整理しました'
 
-  // --- key_message ≤ 44文字 ---
+  // --- key_message ---
   const km = avoidAppeals[0]?.replacement_message
-    ? cleanLabel(avoidAppeals[0].replacement_message, 40)
+    ? hardCut(cleanLabel(avoidAppeals[0].replacement_message, 40), 44)
     : undefined
-  const key_message = hardCut(km, 44) || undefined
+  const key_message = km || undefined
 
   return {
-    title: 'Competitor — 競合',
-    summary: hardCut(summary, 60),
+    title:    'Competitor — 競合',
+    summary:  hardCut(summary, 60),
     bullets,
     key_message,
   }
@@ -223,15 +236,13 @@ function buildCompany(analysis: ProjectAnalysis): Strategy3CSection {
 
   // 強み：rating_points.label を cleanLabel して2件まで
   const strengthVals = ratingPoints.slice(0, 3).map((rp) => cleanLabel(rp.label, 12))
-  const strengthVal = safeJoin(strengthVals, '・', 28)
-
+  const strengthVal  = safeJoin(strengthVals, '・', 26)
   // 言葉：appeal_words.word 3件まで（word は既に短い）
   const wordVals = appealWords.slice(0, 4).map((w) => hardCut(w.word, 10))
-  const wordVal = safeJoin(wordVals, '・', 28)
-
+  const wordVal  = safeJoin(wordVals, '・', 26)
   // 価値：demand_points.label or copyworthy_phrases[0] を cleanLabel
   const valueRaw = demandPoints[0]?.label || ratingPoints[0]?.copyworthy_phrases?.[0] || null
-  const valueVal = cleanLabel(valueRaw, 26)
+  const valueVal = hardCut(cleanLabel(valueRaw, 26), 26)
 
   const bullets = [
     bul('強み', strengthVal),
@@ -239,26 +250,28 @@ function buildCompany(analysis: ProjectAnalysis): Strategy3CSection {
     bul('価値', valueVal),
   ].filter(Boolean).slice(0, 3) as string[]
 
-  // --- summary ≤ 60文字 ---
-  const sl = cleanLabel(ratingPoints[0]?.label, 20)
-  const wl = cleanLabel(appealWords[0]?.word, 16)
+  // --- summary: safeEmbed で安全確認 ---
+  const sl = safeEmbed(ratingPoints[0]?.label, 18)
+  const wl = safeEmbed(appealWords[0]?.word,   14)
   const summary = sl
     ? `自社の強みは「${sl}」にある`
     : wl
     ? `「${wl}」など独自の訴求ワードが強み`
-    : '自社レビューから強みを分析しています'
+    : strengthVal
+    ? `${hardCut(strengthVal, 20)}が自社の差別化ポイント`
+    : '自社レビューから強みを整理しました'
 
-  // --- key_message ≤ 44文字 ---
+  // --- key_message ---
   const km = appealWords[0]?.word
     ? `${hardCut(appealWords[0].word, 16)}を主軸にした訴求が有効`
     : demandPoints[0]?.label
-    ? `${cleanLabel(demandPoints[0].label, 18)}を前面に打ち出す`
+    ? `${hardCut(cleanLabel(demandPoints[0].label, 18), 18)}を前面に打ち出す`
     : undefined
   const key_message = hardCut(km, 44) || undefined
 
   return {
-    title: 'Company — 自社',
-    summary: hardCut(summary, 60),
+    title:    'Company — 自社',
+    summary:  hardCut(summary, 60),
     bullets,
     key_message,
   }
@@ -272,57 +285,54 @@ function buildWinningStrategy(analysis: ProjectAnalysis): Strategy3CSection {
   const insights         = (analysis.marketing_insights ?? []) as MarketingInsight[]
   const avoidAppeals     = (analysis.avoid_appeals      ?? []) as AvoidAppeal[]
   const demandPoints     = (analysis.demand_points      ?? []) as DemandPoint[]
-  const occasionInsights = (analysis.occasion_insights  ?? []) as OccasionInsight[]
   const appealWords      = (analysis.appeal_words       ?? []) as AppealWord[]
 
   const highInsights = insights.filter((i) => i.priority === 'high')
 
   // 捨てる：avoid_appeals.appeal を cleanLabel して2件まで
   const avoidVals = avoidAppeals.slice(0, 3).map((aa) => cleanLabel(aa.appeal, 12))
-  const avoidVal = safeJoin(avoidVals, '・', 26)
+  const avoidVal  = safeJoin(avoidVals, '・', 26)
 
   // 打ち出す：appeal_words.word or demand_points.label 3件まで
   const pushItems = appealWords.length
     ? appealWords.slice(0, 4).map((w) => hardCut(w.word, 10))
     : demandPoints.slice(0, 3).map((dp) => cleanLabel(dp.label, 12))
-  const pushVal = safeJoin(pushItems, '・', 28)
+  const pushVal = safeJoin(pushItems, '・', 26)
 
-  // 施策：high insight の insight の先頭部分
-  const actionRaw = highInsights[0]?.insight || occasionInsights[0]?.occasion || ''
-  const actionEnd = Math.min(
-    actionRaw.indexOf('、') > 0 ? actionRaw.indexOf('、') : 999,
-    actionRaw.indexOf('。') > 0 ? actionRaw.indexOf('。') : 999,
-    18
-  )
-  const actionVal = actionRaw ? cleanLabel(actionRaw.slice(0, actionEnd), 20) : null
+  // 施策：チャネル推定による固定句（raw insight テキストをそのまま使わない）
+  const channelVal = (insights.length + highInsights.length > 0)
+    ? inferChannel(insights)
+    : null
 
   const bullets = [
     bul('捨てる',   avoidVal),
     bul('打ち出す', pushVal),
-    bul('施策',     actionVal),
+    bul('施策',     channelVal),
   ].filter(Boolean).slice(0, 3) as string[]
 
-  // --- summary ≤ 60文字 ---
-  const avoidL = cleanLabel(avoidAppeals[0]?.appeal, 12)
-  const pushL  = cleanLabel(appealWords[0]?.word || demandPoints[0]?.label, 12)
+  // --- summary: safeEmbed で安全確認 ---
+  const avoidL = safeEmbed(avoidAppeals[0]?.appeal,                       12)
+  const pushL  = safeEmbed(appealWords[0]?.word || demandPoints[0]?.label, 12)
   const summary = avoidL && pushL
     ? `${avoidL}訴求を捨て、${pushL}へ転換する`
-    : highInsights[0]?.insight
-    ? hardCut(cleanLabel(highInsights[0].insight, 55), 58)
-    : 'マーケティング示唆から勝ち筋を導出しています'
+    : avoidL
+    ? `${avoidL}訴求を捨て、強みを前面に打ち出す`
+    : pushL
+    ? `${pushL}を中心に据えた訴求へ転換する`
+    : '勝ち筋となる訴求軸を整理しました'
 
-  // --- key_message ≤ 44文字 ---
+  // --- key_message ---
   const kmAction = highInsights[0]?.suggested_action
-    ? hardCut(highInsights[0].suggested_action, 42)
+    ? hardCut(highInsights[0].suggested_action, 44)
     : null
   const kmDemand = demandPoints[0]?.marketing_use
-    ? hardCut(demandPoints[0].marketing_use, 42)
+    ? hardCut(demandPoints[0].marketing_use, 44)
     : null
   const key_message = hardCut(kmAction ?? kmDemand ?? undefined, 44) || undefined
 
   return {
-    title: 'Winning Strategy — 勝ち筋',
-    summary: hardCut(summary, 60),
+    title:    'Winning Strategy — 勝ち筋',
+    summary:  hardCut(summary, 60),
     bullets,
     key_message,
   }
@@ -335,6 +345,7 @@ function buildWinningStrategy(analysis: ProjectAnalysis): Strategy3CSection {
 /**
  * 既存の分析結果から3C分析を組み立てる。Claude APIは呼ばない。
  * 出力文字列に省略記号「…」「...」は含まれない。
+ * テンプレート埋め込み文字列は safeEmbed() で助詞末チェック済み。
  */
 export function buildStrategy3C(
   analysis: ProjectAnalysis,
