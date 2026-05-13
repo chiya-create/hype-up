@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { BarChart3, FileText, AlertCircle, List, BarChart2, Bug, GitCompare, Newspaper } from 'lucide-react'
 import { createServerUserClient } from '@/lib/supabase/server'
-import { getCurrentUserAccessContext } from '@/lib/auth/permissions'
+import { getCurrentUserAccessContext, isPlatformAdmin } from '@/lib/auth/permissions'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -100,6 +100,7 @@ export default async function ProjectDetailPage({
   const chunkList = chunks ?? []
   const errorChunks = chunkList.filter((c) => c.status === 'error')
   const hasErrorChunks = errorChunks.length > 0
+  const isAdmin = isPlatformAdmin(ctx.role)
 
   const analysis: ProjectAnalysis | null = analysisRow
     ? (analysisRow as unknown as ProjectAnalysis)
@@ -288,10 +289,10 @@ export default async function ProjectDetailPage({
               </Link>
             )}
 
-            {chunkList.length > 0 && (
+            {isAdmin && chunkList.length > 0 && (
               <Link
                 href={`/projects/${id}/debug`}
-                className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5 text-muted-foreground/60')}
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
                 title="Admin / 開発者向けデバッグ画面"
               >
                 <Bug className="h-4 w-4" />
@@ -302,10 +303,10 @@ export default async function ProjectDetailPage({
             {analysis && (
               <Link
                 href={`/compare?preselect=${id}`}
-                className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5 text-muted-foreground')}
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
               >
                 <GitCompare className="h-4 w-4" />
-                他の商品と比較
+                競合比較
               </Link>
             )}
           </div>
