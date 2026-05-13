@@ -71,11 +71,11 @@ interface EdgeBadgeProps {
 function EdgeBadge({ label, heart, style }: EdgeBadgeProps) {
   return (
     <div
-      className="absolute z-10 flex items-center gap-0.5 rounded-full border border-border/60 bg-background/90 px-1.5 py-0.5 text-[8.5px] font-medium text-muted-foreground whitespace-nowrap pointer-events-none"
+      className="absolute z-10 flex items-center gap-1 rounded-full border border-border bg-white dark:bg-card shadow-sm px-2 py-0.5 text-[10px] font-semibold text-foreground/70 whitespace-nowrap pointer-events-none"
       style={style}
     >
       {heart && (
-        <Heart className="h-2.5 w-2.5 flex-shrink-0 fill-rose-400 stroke-none" />
+        <Heart className="h-3 w-3 flex-shrink-0 fill-rose-400 stroke-none" />
       )}
       {label}
     </div>
@@ -85,68 +85,82 @@ function EdgeBadge({ label, heart, style }: EdgeBadgeProps) {
 // ---------------------------------------------------------------------------
 // TriangleDiagram — デスクトップ三角形レイアウト (md+)
 //
-// SVG viewBox="0 0 100 75" + preserveAspectRatio="none" により
+// SVG viewBox="0 0 100 60" + preserveAspectRatio="none" により
 // SVG の x/y 座標がコンテナの %幅 / %高さ に 1:1 で対応する。
-// ノードの配置を以下の「中心点」に合わせて線を引く:
-//   Customer       : (50, 11)
-//   Competitor     : (13, 60)
-//   Company        : (87, 60)
-//   WinningStrategy: (50, 40)   ← 三角形の重心付近
+//
+// ノード中心座標（SVG space = CSS %、y軸は 60 が最下部）:
+//   Customer       : (50, 10)  ← top:4%  + card_half(~13%) ≈ 17% → 17/100*60≈10
+//   Competitor     : (13, 50)  ← bottom:4% → top≈83% → center≈83+13%=96%? No:
+//                              ← card height ~23% of container, center at 100-4-23/2 ≈ 84.5% → y=50.7
+//   Company        : (87, 50)
+//   WinningStrategy: (50, 22)  ← top:36% → 36/100*60=21.6≈22
 // ---------------------------------------------------------------------------
 
 function TriangleDiagram({ data }: { data: Strategy3C }) {
   const { customer, competitor, company, winning_strategy } = data
 
   return (
-    // paddingBottom: '75%' → 高さ = 幅 × 0.75、SVG viewBox 0 0 100 75 と一致
-    <div className="relative w-full" style={{ paddingBottom: '75%' }}>
+    // paddingBottom: '60%' → 高さ = 幅 × 0.60、SVG viewBox 0 0 100 60 と対応
+    <div className="relative w-full" style={{ paddingBottom: '60%' }}>
 
-      {/* SVG 接続線レイヤー */}
+      {/* SVG 接続線レイヤー
+           ─ viewBox 0 0 100 60 → x/y がそのまま CSS %width / %height に対応 ─
+           ノード中心の推定 CSS%:
+             Customer       : (50, 15)  top:4% + card_half≈11% = 15%
+             Competitor     : (13, 84)  bottom:4% → top≈74%, center≈85% (minWidth考慮)
+             Company        : (87, 84)
+             Winning        : (50, 36)  top:36% transform:-50% → center=36%
+           SVG 座標 = CSS% ÷ 100 × viewBox (100×60):
+             Customer : (50, 9)   Competitor: (13, 50)   Company: (87, 50)   Winning: (50, 22)
+      */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
-        viewBox="0 0 100 75"
+        viewBox="0 0 100 60"
         preserveAspectRatio="none"
         fill="none"
         aria-hidden="true"
       >
-        {/* 外周三角形 (破線) — Customer-Competitor-Company */}
+        {/* 外周三角形 (破線): Customer–Competitor–Company */}
         <line
-          x1="50" y1="19" x2="17" y2="58"
-          stroke="currentColor" strokeWidth="0.45"
-          strokeDasharray="2.5 1.5" strokeOpacity="0.45"
+          x1="50" y1="13" x2="16" y2="47"
+          stroke="currentColor" strokeWidth="0.4"
+          strokeDasharray="2.5 1.5" strokeOpacity="0.35"
           className="text-border"
         />
         <line
-          x1="50" y1="19" x2="83" y2="58"
-          stroke="currentColor" strokeWidth="0.45"
-          strokeDasharray="2.5 1.5" strokeOpacity="0.45"
+          x1="50" y1="13" x2="84" y2="47"
+          stroke="currentColor" strokeWidth="0.4"
+          strokeDasharray="2.5 1.5" strokeOpacity="0.35"
           className="text-border"
         />
         <line
-          x1="21" y1="67" x2="79" y2="67"
-          stroke="currentColor" strokeWidth="0.45"
-          strokeDasharray="2.5 1.5" strokeOpacity="0.45"
+          x1="21" y1="53" x2="79" y2="53"
+          stroke="currentColor" strokeWidth="0.4"
+          strokeDasharray="2.5 1.5" strokeOpacity="0.35"
           className="text-border"
         />
-        {/* 重心スポーク (実線・紫) — 各ノード → Winning Strategy */}
+        {/* 重心スポーク (実線・紫) — カード端→カード端で隙間を開ける */}
+        {/* Customer(50,9) → Winning(50,22): カード端から端 */}
         <line
-          x1="50" y1="21" x2="50" y2="34"
-          stroke="#8b5cf6" strokeWidth="0.55" strokeOpacity="0.4"
+          x1="50" y1="14" x2="50" y2="19"
+          stroke="#8b5cf6" strokeWidth="0.7" strokeOpacity="0.65"
         />
+        {/* Competitor(13,50) → Winning(50,22) */}
         <line
-          x1="20" y1="61" x2="44" y2="46"
-          stroke="#8b5cf6" strokeWidth="0.55" strokeOpacity="0.4"
+          x1="18" y1="48" x2="44" y2="26"
+          stroke="#8b5cf6" strokeWidth="0.7" strokeOpacity="0.65"
         />
+        {/* Company(87,50) → Winning(50,22) */}
         <line
-          x1="80" y1="61" x2="56" y2="46"
-          stroke="#8b5cf6" strokeWidth="0.55" strokeOpacity="0.4"
+          x1="82" y1="48" x2="56" y2="26"
+          stroke="#8b5cf6" strokeWidth="0.7" strokeOpacity="0.65"
         />
       </svg>
 
       {/* ── Customer: top center ── */}
       <div
         className="absolute"
-        style={{ top: '2%', left: '50%', transform: 'translateX(-50%)', width: '24%', minWidth: 144 }}
+        style={{ top: '4%', left: '50%', transform: 'translateX(-50%)', width: '22%', minWidth: 140 }}
       >
         <NodeCard
           emoji="💗"
@@ -162,7 +176,7 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       {/* ── Competitor: bottom left ── */}
       <div
         className="absolute"
-        style={{ bottom: '3%', left: '2%', width: '24%', minWidth: 144 }}
+        style={{ bottom: '4%', left: '3%', width: '22%', minWidth: 140 }}
       >
         <NodeCard
           emoji="⚔️"
@@ -178,7 +192,7 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       {/* ── Company: bottom right ── */}
       <div
         className="absolute"
-        style={{ bottom: '3%', right: '2%', width: '24%', minWidth: 144 }}
+        style={{ bottom: '4%', right: '3%', width: '22%', minWidth: 140 }}
       >
         <NodeCard
           emoji="🌟"
@@ -191,10 +205,11 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
         />
       </div>
 
-      {/* ── Winning Strategy: center (重心) ── */}
+      {/* ── Winning Strategy: center-upper (重心より上寄せ) ── */}
+      {/*    top:36% で Customer との距離を縮め「選ばれる理由」感を強調  */}
       <div
         className="absolute"
-        style={{ top: '40%', left: '50%', transform: 'translate(-50%, -50%)', width: '26%', minWidth: 152 }}
+        style={{ top: '36%', left: '50%', transform: 'translate(-50%, -50%)', width: '24%', minWidth: 148 }}
       >
         <NodeCard
           emoji="⚡"
@@ -209,21 +224,21 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       </div>
 
       {/* ── Edge labels ── */}
-      {/* Customer ↔ Competitor の左側 */}
+      {/* Customer ↔ Competitor の中間左寄り */}
       <EdgeBadge
         label="比較される訴求"
-        style={{ left: '16%', top: '42%', transform: 'translateY(-50%)' }}
+        style={{ left: '15%', top: '40%', transform: 'translateY(-50%)' }}
       />
-      {/* Customer ↔ Company の右側 */}
+      {/* Customer ↔ Company の中間右寄り */}
       <EdgeBadge
         label="刺さる訴求"
         heart
-        style={{ right: '16%', top: '42%', transform: 'translateY(-50%)' }}
+        style={{ right: '15%', top: '40%', transform: 'translateY(-50%)' }}
       />
       {/* Competitor ↔ Company の下辺中央 */}
       <EdgeBadge
         label="差別化"
-        style={{ left: '50%', bottom: '10%', transform: 'translateX(-50%)' }}
+        style={{ left: '50%', bottom: '8%', transform: 'translateX(-50%)' }}
       />
     </div>
   )
