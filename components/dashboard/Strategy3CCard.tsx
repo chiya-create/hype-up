@@ -4,7 +4,10 @@ import { Users, Target, Building2, Zap } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Strategy3C, Strategy3CSection } from '@/types/analysis'
 
-// Section configs
+// ---------------------------------------------------------------------------
+// Section color configs
+// ---------------------------------------------------------------------------
+
 const SECTIONS = [
   {
     key: 'customer' as const,
@@ -13,7 +16,7 @@ const SECTIONS = [
     bg: 'bg-blue-50 dark:bg-blue-950/30',
     border: 'border-blue-200 dark:border-blue-800',
     badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    accent: 'bg-blue-600',
+    dot: 'bg-blue-500',
   },
   {
     key: 'competitor' as const,
@@ -22,7 +25,7 @@ const SECTIONS = [
     bg: 'bg-amber-50 dark:bg-amber-950/30',
     border: 'border-amber-200 dark:border-amber-800',
     badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-    accent: 'bg-amber-500',
+    dot: 'bg-amber-500',
   },
   {
     key: 'company' as const,
@@ -31,7 +34,7 @@ const SECTIONS = [
     bg: 'bg-emerald-50 dark:bg-emerald-950/30',
     border: 'border-emerald-200 dark:border-emerald-800',
     badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-    accent: 'bg-emerald-600',
+    dot: 'bg-emerald-500',
   },
   {
     key: 'winning_strategy' as const,
@@ -40,9 +43,42 @@ const SECTIONS = [
     bg: 'bg-violet-50 dark:bg-violet-950/30',
     border: 'border-violet-200 dark:border-violet-800',
     badge: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
-    accent: 'bg-violet-600',
+    dot: 'bg-violet-500',
   },
 ]
+
+// ---------------------------------------------------------------------------
+// BulletItem — 「ラベル：値」を split してラベルを太字表示
+// ---------------------------------------------------------------------------
+
+function BulletItem({
+  text,
+  dot,
+}: {
+  text: string
+  dot: string
+}) {
+  // 全角コロン「：」でラベルと値を分割
+  const colonIdx = text.indexOf('：')
+  const label = colonIdx > 0 ? text.slice(0, colonIdx) : null
+  const value = colonIdx > 0 ? text.slice(colonIdx + 1) : text
+
+  return (
+    <li className="flex items-baseline gap-2 text-xs">
+      <span className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+      <span className="leading-[1.6]">
+        {label && (
+          <span className="font-semibold text-foreground/90">{label}：</span>
+        )}
+        <span className="text-foreground/75">{value}</span>
+      </span>
+    </li>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// SectionCard
+// ---------------------------------------------------------------------------
 
 interface SectionCardProps {
   section: Strategy3CSection
@@ -55,27 +91,28 @@ function SectionCard({ section, config }: SectionCardProps) {
     <Card className={`border ${config.border} ${config.bg}`}>
       <CardHeader className="pb-2 pt-4 px-4">
         <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-          <Icon className={`h-4 w-4 ${config.color}`} />
+          <Icon className={`h-4 w-4 shrink-0 ${config.color}`} />
           <span className={config.color}>{section.title}</span>
         </CardTitle>
-        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-          {section.summary}
-        </p>
+        {section.summary && (
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            {section.summary}
+          </p>
+        )}
       </CardHeader>
+
       <CardContent className="px-4 pb-4 space-y-3">
         {section.bullets.length > 0 && (
-          <ul className="space-y-1.5">
-            {section.bullets.slice(0, 4).map((bullet, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-foreground/80">
-                <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${config.accent}`} />
-                <span className="leading-relaxed">{bullet}</span>
-              </li>
+          <ul className="space-y-2">
+            {section.bullets.slice(0, 3).map((b, i) => (
+              <BulletItem key={i} text={b} dot={config.dot} />
             ))}
           </ul>
         )}
+
         {section.key_message && (
           <div className={`rounded-md px-3 py-2 ${config.badge}`}>
-            <p className="text-xs font-medium leading-relaxed">
+            <p className="text-xs font-medium leading-[1.6]">
               💡 {section.key_message}
             </p>
           </div>
@@ -84,6 +121,10 @@ function SectionCard({ section, config }: SectionCardProps) {
     </Card>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Strategy3CCard (public)
+// ---------------------------------------------------------------------------
 
 interface Strategy3CCardProps {
   data: Strategy3C
