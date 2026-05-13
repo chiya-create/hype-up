@@ -324,7 +324,7 @@ export default async function ProjectDetailPage({
             </div>
           ) : analysis ? (
             <>
-              <DashboardTabs analysis={analysis} />
+              <DashboardTabs analysis={analysis} benchmark={benchmark} />
               <div className="mt-8">
                 <IndustryBenchmarkCard
                   benchmark={benchmark!}

@@ -9,6 +9,7 @@ import { CustomerTypesChart } from '@/components/dashboard/CustomerTypesChart'
 import { AppealWordsCloud } from '@/components/dashboard/AppealWordsCloud'
 import { Strategy3CCard } from '@/components/dashboard/Strategy3CCard'
 import { buildStrategy3C } from '@/lib/insights/strategy-3c'
+import type { IndustryBenchmark } from '@/lib/insights/benchmark'
 import type {
   ProjectAnalysis,
   RatingPoint,
@@ -21,15 +22,18 @@ import type {
 
 interface DashboardTabsProps {
   analysis: ProjectAnalysis
+  /** benchmark を渡すと Competitor セクションの精度が上がる（省略可） */
+  benchmark?: IndustryBenchmark | null
 }
 
-export function DashboardTabs({ analysis }: DashboardTabsProps) {
+export function DashboardTabs({ analysis, benchmark }: DashboardTabsProps) {
   const ratingPoints = (analysis.rating_points ?? []) as RatingPoint[]
   const complaints = (analysis.complaints ?? []) as Complaint[]
   const purchaseReasons = (analysis.purchase_reasons ?? []) as PurchaseReason[]
   const customerTypes = (analysis.customer_types ?? []) as CustomerType[]
   const appealWords = (analysis.appeal_words ?? []) as AppealWord[]
-  const strategy3c: Strategy3C = buildStrategy3C(analysis)
+  // DB保存済み analysis.strategy_3c は参照せず、毎回 buildStrategy3C() で最新ロジックを適用する
+  const strategy3c: Strategy3C = buildStrategy3C(analysis, benchmark)
 
   return (
     <Tabs defaultValue="overview">
