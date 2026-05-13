@@ -259,57 +259,55 @@ export default async function ProjectDetailPage({
         )}
 
         {/* レビュー一覧・エクスポートアクション */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 flex-wrap">
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/projects/${id}/reviews`}
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
+          >
+            <List className="h-4 w-4" />
+            レビュー一覧 ({project.review_count.toLocaleString()} 件)
+          </Link>
+
+          {analysis && (
             <Link
-              href={`/projects/${id}/reviews`}
+              href={`/projects/${id}/report`}
               className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
             >
-              <List className="h-4 w-4" />
-              レビュー一覧 ({project.review_count.toLocaleString()} 件)
+              <BarChart2 className="h-4 w-4" />
+              レポートを見る
             </Link>
+          )}
 
-            {analysis && (
-              <Link
-                href={`/projects/${id}/report`}
-                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
-              >
-                <BarChart2 className="h-4 w-4" />
-                レポートを見る
-              </Link>
-            )}
+          {analysis && (
+            <Link
+              href={`/projects/${id}/one-pager`}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
+            >
+              <Newspaper className="h-4 w-4" />
+              1枚サマリー
+            </Link>
+          )}
 
-            {analysis && (
-              <Link
-                href={`/projects/${id}/one-pager`}
-                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
-              >
-                <Newspaper className="h-4 w-4" />
-                1枚サマリー
-              </Link>
-            )}
+          {isAdmin && chunkList.length > 0 && (
+            <Link
+              href={`/projects/${id}/debug`}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
+              title="Admin / 開発者向けデバッグ画面"
+            >
+              <Bug className="h-4 w-4" />
+              デバッグ (Admin)
+            </Link>
+          )}
 
-            {isAdmin && chunkList.length > 0 && (
-              <Link
-                href={`/projects/${id}/debug`}
-                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
-                title="Admin / 開発者向けデバッグ画面"
-              >
-                <Bug className="h-4 w-4" />
-                デバッグ (Admin)
-              </Link>
-            )}
-
-            {analysis && (
-              <Link
-                href={`/compare?preselect=${id}`}
-                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
-              >
-                <GitCompare className="h-4 w-4" />
-                競合比較
-              </Link>
-            )}
-          </div>
+          {analysis && (
+            <Link
+              href={`/compare?preselect=${id}`}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1.5')}
+            >
+              <GitCompare className="h-4 w-4" />
+              競合比較
+            </Link>
+          )}
 
           <ExportActions projectId={id} hasAnalysis={!!analysis} />
         </div>
