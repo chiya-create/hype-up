@@ -6,9 +6,11 @@
  *
  * 設計原則:
  *  - 省略記号「…」「...」を一切出さない
- *  - テンプレート埋め込み前に safeEmbed() で助詞末チェック → NG なら固定フォールバック
+ *  - テンプレート埋め込みは safeEmbed / safeEmbedNoun で安全確認してから
  *  - summary ≤ 60 / bullet value ≤ 30 / key_message ≤ 44
  *  - bullets: 各カード最大3件
+ *  - customer_type.label は normalizePersona() で自然な人物像に変換
+ *  - avoid_appeal は categorizeAvoid() で戦略カテゴリ名に変換
  */
 import type {
   ProjectAnalysis,
@@ -27,7 +29,7 @@ import type {
 import type { IndustryBenchmark } from './benchmark'
 
 // ---------------------------------------------------------------------------
-// 内部ヘルパー
+// 基本ヘルパー
 // ---------------------------------------------------------------------------
 
 /** 省略記号なしハードカット */
@@ -38,10 +40,7 @@ function hardCut(s: string | null | undefined, max: number): string {
 
 /**
  * ラベルから冗長な助詞・接続句を除去し、短い名詞句にする。
- * 変換例:
- *   "セルライト対策としての即効性への期待値ギャップ" → "セルライト対策の即効性"
- *   "価格の高さと容量消費のバランス"               → "価格・容量消費"
- *   "絶対大丈夫な安全性への訴求"                  → "絶対大丈夫な安全性"
+ * 例: "〜としての即効性への期待値ギャップ" → "〜の即効性"
  */
 function cleanLabel(s: string | null | undefined, max = 20): string {
   if (!s) return ''
@@ -58,9 +57,22 @@ function cleanLabel(s: string | null | undefined, max = 20): string {
 }
 
 /**
- * 文章テンプレートへの埋め込みに安全かチェック。
+ * コロン（：/: ）以降を除去して前半部分だけ取り出す。
+ * "産後ボディ悩み層：30代産後女性" → "産後ボディ悩み層"
+ */
+function stripSubLabel(s: string): string {
+  const i = Math.min(
+    s.indexOf('：') > 0 ? s.indexOf('：') : 9999,
+    s.indexOf(':')  > 0 ? s.indexOf(':')  : 9999,
+    s.indexOf('（') > 0 ? s.indexOf('（') : 9999,
+    s.indexOf('(')  > 0 ? s.indexOf('(')  : 9999,
+  )
+  return i < 9999 ? s.slice(0, i).trim() : s
+}
+
+/**
+ * テンプレートへの埋め込みに安全かチェック（汎用）。
  * 末尾が助詞・な形・括弧類の場合は null を返す。
- * 2文字未満 or max 超えも null。
  */
 function safeEmbed(s: string | null | undefined, max = 14): string | null {
   if (!s) return null
@@ -71,8 +83,19 @@ function safeEmbed(s: string | null | undefined, max = 14): string | null {
 }
 
 /**
+ * 名詞位置（"〜へ転換する" など）専用の埋め込みチェック。
+ * i形容詞末（〜い）も NG にする。
+ */
+function safeEmbedNoun(s: string | null | undefined, max = 14): string | null {
+  const base = safeEmbed(s, max)
+  if (!base) return null
+  // i形容詞形（例: ベタつきが少ない、少ない、多い、高い）はNG
+  if (/[いい]$/.test(base)) return null
+  return base
+}
+
+/**
  * 複数要素を sep で結合し、max 文字以内に収まる範囲だけ結合（省略記号なし）。
- * 各要素は cleanLabel 済みの短いラベルを想定。
  */
 function safeJoin(items: string[], sep: string, max: number): string {
   const clean = items.filter(Boolean)
@@ -85,10 +108,62 @@ function safeJoin(items: string[], sep: string, max: number): string {
   return result.length > 0 ? result.join(sep) : hardCut(clean[0] ?? '', max)
 }
 
-/** 「ラベル：値」bullet。value が空なら null。value は maxVal 文字でハードカット。 */
+/** 「ラベル：値」bullet。value が空なら null。 */
 function bul(label: string, value: string | null | undefined, maxVal = 30): string | null {
   const v = hardCut(value, maxVal)
   return v ? `${label}：${v}` : null
+}
+
+// ---------------------------------------------------------------------------
+// ドメイン変換ヘルパー
+// ---------------------------------------------------------------------------
+
+/**
+ * customer_types.label を自然な人物像に変換。
+ * ラベルに含まれるキーワードでパターンマッチし、読みやすい短句を返す。
+ * マッチしない場合は cleanLabel + stripSubLabel で整形。
+ */
+function normalizePersona(label: string, description = ''): string {
+  const text = `${label} ${description}`
+  const patterns: [RegExp, string][] = [
+    [/産後/,             '産後の女性'],
+    [/立ち仕事/,          '立ち仕事の女性'],
+    [/敏感肌/,           '敏感肌の女性'],
+    [/乾燥肌/,           '乾燥肌の女性'],
+    [/むくみ|浮腫/,       'むくみが気になる女性'],
+    [/セルライト|凹凸/,   '体型変化を気にする女性'],
+    [/継続|習慣|毎日/,    '継続ケアを求める女性'],
+    [/美容意識|スキンケア/, '美容意識の高い女性'],
+    [/男性|メンズ/,       'スキンケアを始めた男性'],
+    [/高齢|シニア|50代|60代/, 'シニア世代の女性'],
+  ]
+  for (const [pattern, result] of patterns) {
+    if (pattern.test(text)) return result
+  }
+  // フォールバック: サブラベル除去 → cleanLabel
+  return hardCut(cleanLabel(stripSubLabel(label), 18), 18)
+}
+
+/**
+ * avoid_appeal の appeal テキストを戦略カテゴリ名に変換。
+ * "どんな敏感肌でも絶対大丈夫" → "過剰な安心訴求"
+ */
+function categorizeAvoid(appeal: string): string {
+  const PATTERNS: [RegExp, string][] = [
+    [/絶対|必ず|100%|完全に|誰でも必ず/,        '過剰な安心訴求'],
+    [/どんな.*でも|誰でも.*(?:使|効|安)/,        '過剰な安心訴求'],
+    [/すぐ消える?|即効|一瞬で|短期間で|\d+日で/,  '即効性訴求'],
+    [/完全解消|根本から|完治|消える/,             '完全改善訴求'],
+    [/副作用なし|ゼロリスク|絶対安全/,           '安全性過剰訴求'],
+    [/安い|低価格|激安|最安/,                    '低価格訴求'],
+    [/No\.?1|ナンバーワン|日本一|世界一/,        'No.1系強調訴求'],
+    [/芸能人|モデル|有名人|セレブ/,              '権威性訴求'],
+  ]
+  for (const [pattern, result] of PATTERNS) {
+    if (pattern.test(appeal)) return result
+  }
+  // マッチしない場合は短く整形
+  return hardCut(cleanLabel(stripSubLabel(appeal), 12), 12)
 }
 
 /**
@@ -118,14 +193,20 @@ function buildCustomer(analysis: ProjectAnalysis): Strategy3CSection {
   const occasionInsights = (analysis.occasion_insights ?? []) as OccasionInsight[]
   const complaints       = (analysis.complaints        ?? []) as Complaint[]
 
-  // 顧客像：customer_types 上位1件のみ（重複連結防止）
-  const typeVal = hardCut(cleanLabel(customerTypes[0]?.label, 24), 24)
+  // 顧客像：normalizePersona で自然な人物像に変換（1件のみ）
+  const typeVal = normalizePersona(
+    customerTypes[0]?.label ?? '',
+    customerTypes[0]?.description ?? '',
+  )
+
   // 悩み：complaints.label を cleanLabel して2件まで結合
   const complaintVals = complaints.slice(0, 3).map((c) => cleanLabel(c.label, 12))
-  const complaintVal  = safeJoin(complaintVals, '・', 28)
+  const complaintVal  = safeJoin(complaintVals, '・', 26)
+
   // 欲求：purchase_reasons.label を cleanLabel して2件まで
   const reasonVals = purchaseReasons.slice(0, 2).map((pr) => cleanLabel(pr.label, 14))
-  const reasonVal  = safeJoin(reasonVals, '・', 28)
+  const reasonVal  = safeJoin(reasonVals, '・', 26)
+
   // 想起：occasion_insights.occasion 1件
   const occasionVal = hardCut(cleanLabel(occasionInsights[0]?.occasion, 22), 22)
 
@@ -136,15 +217,17 @@ function buildCustomer(analysis: ProjectAnalysis): Strategy3CSection {
     bul('想起',   occasionVal),
   ].filter(Boolean).slice(0, 3) as string[]
 
-  // --- summary: safeEmbed で安全確認してからテンプレートへ ---
-  const tl = safeEmbed(customerTypes[0]?.label,  13)
-  const cl = safeEmbed(complaints[0]?.label,      13)
-  const summary = tl && cl
-    ? `${tl}が、${cl}を気にしている`
-    : tl
-    ? `${tl}が主な顧客層`
-    : complaintVal
-    ? `${hardCut(complaintVal, 20)}を気にする顧客が中心`
+  // --- summary: typeVal（normalizePersona済）+ complaintVal で自然文 ---
+  const summaryType    = hardCut(typeVal, 16)          // 例: "産後の女性"
+  const summaryIssue   = hardCut(complaintVal, 16)     // 例: "むくみ・凹凸"
+  const summaryReason  = hardCut(reasonVal, 14)        // 例: "すっきりしたい"
+
+  const summary = summaryType && summaryIssue
+    ? `${summaryType}が、${summaryIssue}を気にしている`
+    : summaryType && summaryReason
+    ? `${summaryType}が、${summaryReason}と感じている`
+    : summaryType
+    ? `${summaryType}が主な顧客層`
     : '顧客の特徴・ニーズを整理しました'
 
   // --- key_message ---
@@ -175,9 +258,9 @@ function buildCompetitor(
   const complaints   = (analysis.complaints    ?? []) as Complaint[]
   const avoidAppeals = (analysis.avoid_appeals ?? []) as AvoidAppeal[]
 
-  // 一般化：avoid_appeals.appeal を cleanLabel して2件まで
+  // 一般化：categorizeAvoid で戦略カテゴリ名に変換して2件まで
   const generalVals = avoidAppeals.length
-    ? avoidAppeals.slice(0, 3).map((aa) => cleanLabel(aa.appeal, 12))
+    ? avoidAppeals.slice(0, 3).map((aa) => categorizeAvoid(aa.appeal))
     : (benchmark?.rating_points ?? []).slice(0, 3).map((r) => cleanLabel(r.label, 12))
   const generalVal = safeJoin(generalVals, '・', 26)
 
@@ -190,7 +273,7 @@ function buildCompetitor(
     .map((c) => cleanLabel(c.label, 10))
   const compVal = safeJoin(compVals, '・', 26)
 
-  // 注意：avoid_appeals[0].risk/reason を直接 cleanLabel（句読点サーチをやめる）
+  // 注意：avoid_appeals[0].risk/reason を cleanLabel
   const cautionRaw = avoidAppeals[0]?.risk || avoidAppeals[0]?.reason || ''
   const cautionVal = cautionRaw ? hardCut(cleanLabel(cautionRaw, 20), 20) : null
 
@@ -200,11 +283,11 @@ function buildCompetitor(
     bul('注意',   cautionVal),
   ].filter(Boolean).slice(0, 3) as string[]
 
-  // --- summary: safeEmbed で安全確認 ---
-  const al = safeEmbed(avoidAppeals[0]?.appeal,            14)
+  // --- summary ---
+  const al = safeEmbed(categorizeAvoid(avoidAppeals[0]?.appeal ?? ''), 16)
   const bl = safeEmbed(benchmark?.rating_points[0]?.label, 14)
   const summary = al
-    ? `${al}など一般化した訴求では差別化が難しい`
+    ? `${al}は一般化し、差別化しづらい`
     : bl
     ? `${bl}では業界内で差別化が難しい`
     : generalVal
@@ -237,7 +320,7 @@ function buildCompany(analysis: ProjectAnalysis): Strategy3CSection {
   // 強み：rating_points.label を cleanLabel して2件まで
   const strengthVals = ratingPoints.slice(0, 3).map((rp) => cleanLabel(rp.label, 12))
   const strengthVal  = safeJoin(strengthVals, '・', 26)
-  // 言葉：appeal_words.word 3件まで（word は既に短い）
+  // 言葉：appeal_words.word 3件まで
   const wordVals = appealWords.slice(0, 4).map((w) => hardCut(w.word, 10))
   const wordVal  = safeJoin(wordVals, '・', 26)
   // 価値：demand_points.label or copyworthy_phrases[0] を cleanLabel
@@ -250,9 +333,9 @@ function buildCompany(analysis: ProjectAnalysis): Strategy3CSection {
     bul('価値', valueVal),
   ].filter(Boolean).slice(0, 3) as string[]
 
-  // --- summary: safeEmbed で安全確認 ---
+  // --- summary ---
   const sl = safeEmbed(ratingPoints[0]?.label, 18)
-  const wl = safeEmbed(appealWords[0]?.word,   14)
+  const wl = safeEmbedNoun(appealWords[0]?.word, 14)
   const summary = sl
     ? `自社の強みは「${sl}」にある`
     : wl
@@ -261,9 +344,9 @@ function buildCompany(analysis: ProjectAnalysis): Strategy3CSection {
     ? `${hardCut(strengthVal, 20)}が自社の差別化ポイント`
     : '自社レビューから強みを整理しました'
 
-  // --- key_message ---
-  const km = appealWords[0]?.word
-    ? `${hardCut(appealWords[0].word, 16)}を主軸にした訴求が有効`
+  // --- key_message: "〜を主軸にした訴求が有効" — 名詞形のwordだけ使う ---
+  const km = appealWords.map((w) => safeEmbedNoun(w.word, 14)).find((v) => v != null)
+    ? `${safeEmbedNoun(appealWords[0]?.word, 14)}を主軸にした訴求が有効`
     : demandPoints[0]?.label
     ? `${hardCut(cleanLabel(demandPoints[0].label, 18), 18)}を前面に打ち出す`
     : undefined
@@ -289,20 +372,20 @@ function buildWinningStrategy(analysis: ProjectAnalysis): Strategy3CSection {
 
   const highInsights = insights.filter((i) => i.priority === 'high')
 
-  // 捨てる：avoid_appeals.appeal を cleanLabel して2件まで
-  const avoidVals = avoidAppeals.slice(0, 3).map((aa) => cleanLabel(aa.appeal, 12))
+  // 捨てる：categorizeAvoid で変換して2件まで
+  const avoidVals = avoidAppeals.slice(0, 3).map((aa) => categorizeAvoid(aa.appeal))
   const avoidVal  = safeJoin(avoidVals, '・', 26)
 
-  // 打ち出す：appeal_words.word or demand_points.label 3件まで
+  // 打ち出す：appeal_words.word（名詞形のみ）or demand_points.label 3件まで
   const pushItems = appealWords.length
-    ? appealWords.slice(0, 4).map((w) => hardCut(w.word, 10))
+    ? appealWords.slice(0, 5)
+        .map((w) => safeEmbedNoun(w.word, 10))
+        .filter((v): v is string => v !== null)
     : demandPoints.slice(0, 3).map((dp) => cleanLabel(dp.label, 12))
   const pushVal = safeJoin(pushItems, '・', 26)
 
-  // 施策：チャネル推定による固定句（raw insight テキストをそのまま使わない）
-  const channelVal = (insights.length + highInsights.length > 0)
-    ? inferChannel(insights)
-    : null
+  // 施策：チャネル推定による固定句
+  const channelVal = (insights.length > 0) ? inferChannel(insights) : null
 
   const bullets = [
     bul('捨てる',   avoidVal),
@@ -310,15 +393,18 @@ function buildWinningStrategy(analysis: ProjectAnalysis): Strategy3CSection {
     bul('施策',     channelVal),
   ].filter(Boolean).slice(0, 3) as string[]
 
-  // --- summary: safeEmbed で安全確認 ---
-  const avoidL = safeEmbed(avoidAppeals[0]?.appeal,                       12)
-  const pushL  = safeEmbed(appealWords[0]?.word || demandPoints[0]?.label, 12)
-  const summary = avoidL && pushL
-    ? `${avoidL}訴求を捨て、${pushL}へ転換する`
+  // --- summary: avoidL（カテゴリ名）と pushL（名詞形）を使った自然文 ---
+  const avoidL = safeEmbed(categorizeAvoid(avoidAppeals[0]?.appeal ?? ''), 12)
+  // pushL: appeal_words から名詞形のものを優先探索
+  const pushLRaw = appealWords.map((w) => safeEmbedNoun(w.word, 12)).find((v) => v != null)
+    ?? (demandPoints[0]?.label ? safeEmbedNoun(cleanLabel(demandPoints[0].label, 12), 12) : null)
+
+  const summary = avoidL && pushLRaw
+    ? `${avoidL}訴求を捨て、${pushLRaw}へ転換する`
     : avoidL
-    ? `${avoidL}訴求を捨て、強みを前面に打ち出す`
-    : pushL
-    ? `${pushL}を中心に据えた訴求へ転換する`
+    ? `${avoidL}訴求を捨て、自社の強みを前面に打ち出す`
+    : pushLRaw
+    ? `${pushLRaw}を中心に据えた訴求へ転換する`
     : '勝ち筋となる訴求軸を整理しました'
 
   // --- key_message ---
@@ -345,7 +431,6 @@ function buildWinningStrategy(analysis: ProjectAnalysis): Strategy3CSection {
 /**
  * 既存の分析結果から3C分析を組み立てる。Claude APIは呼ばない。
  * 出力文字列に省略記号「…」「...」は含まれない。
- * テンプレート埋め込み文字列は safeEmbed() で助詞末チェック済み。
  */
 export function buildStrategy3C(
   analysis: ProjectAnalysis,
