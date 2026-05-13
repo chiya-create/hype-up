@@ -291,7 +291,13 @@ function buildCompetitor(
     : bl
     ? `${bl}では業界内で差別化が難しい`
     : generalVal
-    ? `${hardCut(generalVal, 18)}訴求は一般化し、差別化しづらい`
+    ? (() => {
+        // categorizeAvoid 結果は既に "〜訴求" 形なので重複を防ぐ
+        const gv = hardCut(generalVal, 18)
+        return gv.endsWith('訴求')
+          ? `${gv}は一般化し、差別化しづらい`
+          : `${gv}訴求は一般化し、差別化しづらい`
+      })()
     : '競合・業界共通の訴求軸を整理しました'
 
   // --- key_message ---
@@ -345,8 +351,10 @@ function buildCompany(analysis: ProjectAnalysis): Strategy3CSection {
     : '自社レビューから強みを整理しました'
 
   // --- key_message: "〜を主軸にした訴求が有効" — 名詞形のwordだけ使う ---
-  const km = appealWords.map((w) => safeEmbedNoun(w.word, 14)).find((v) => v != null)
-    ? `${safeEmbedNoun(appealWords[0]?.word, 14)}を主軸にした訴求が有効`
+  // find() した値をそのまま使う（appealWords[0] を再評価すると null になる場合がある）
+  const kmWord = appealWords.map((w) => safeEmbedNoun(w.word, 14)).find((v) => v != null) ?? null
+  const km = kmWord
+    ? `${kmWord}を主軸にした訴求が有効`
     : demandPoints[0]?.label
     ? `${hardCut(cleanLabel(demandPoints[0].label, 18), 18)}を前面に打ち出す`
     : undefined
@@ -399,10 +407,11 @@ function buildWinningStrategy(analysis: ProjectAnalysis): Strategy3CSection {
   const pushLRaw = appealWords.map((w) => safeEmbedNoun(w.word, 12)).find((v) => v != null)
     ?? (demandPoints[0]?.label ? safeEmbedNoun(cleanLabel(demandPoints[0].label, 12), 12) : null)
 
+  // avoidL は categorizeAvoid 経由で既に "〜訴求" 形 → template に "訴求" を重ねない
   const summary = avoidL && pushLRaw
-    ? `${avoidL}訴求を捨て、${pushLRaw}へ転換する`
+    ? `${avoidL}を捨て、${pushLRaw}へ転換する`
     : avoidL
-    ? `${avoidL}訴求を捨て、自社の強みを前面に打ち出す`
+    ? `${avoidL}を捨て、自社の強みを前面に打ち出す`
     : pushLRaw
     ? `${pushLRaw}を中心に据えた訴求へ転換する`
     : '勝ち筋となる訴求軸を整理しました'
@@ -425,6 +434,51 @@ function buildWinningStrategy(analysis: ProjectAnalysis): Strategy3CSection {
 }
 
 // ---------------------------------------------------------------------------
+// 最終サニタイズ — 生成後の文字列を一括クリーン
+// ---------------------------------------------------------------------------
+
+/**
+ * 個々の文字列フィールドを最終クリーン。
+ * - "null" / "undefined" リテラルを除去
+ * - "訴求訴求" → "訴求"（重複接尾語）
+ * - "へを" → "を"
+ * - "でせ" → "で"
+ * - "絶対大丈…" を除去
+ * - 前後空白トリム・連続空白を単一スペースに
+ */
+function sanitizeStr(s: string): string {
+  return s
+    .replace(/\bnull\b/g, '')
+    .replace(/\bundefined\b/g, '')
+    .replace(/訴求訴求/g, '訴求')
+    .replace(/へを/g, 'を')
+    .replace(/でせ/g, 'で')
+    .replace(/絶対大丈\S*/g, '安心感')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function sanitizeSection(sec: Strategy3CSection): Strategy3CSection {
+  return {
+    ...sec,
+    summary: sanitizeStr(sec.summary),
+    bullets: sec.bullets.map(sanitizeStr).filter(Boolean),
+    key_message: sec.key_message
+      ? sanitizeStr(sec.key_message) || undefined
+      : undefined,
+  }
+}
+
+function sanitizeStrategy3C(s3c: Strategy3C): Strategy3C {
+  return {
+    customer:         sanitizeSection(s3c.customer),
+    competitor:       sanitizeSection(s3c.competitor),
+    company:          sanitizeSection(s3c.company),
+    winning_strategy: sanitizeSection(s3c.winning_strategy),
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
@@ -436,10 +490,10 @@ export function buildStrategy3C(
   analysis: ProjectAnalysis,
   benchmark?: IndustryBenchmark | null
 ): Strategy3C {
-  return {
+  return sanitizeStrategy3C({
     customer:         buildCustomer(analysis),
     competitor:       buildCompetitor(analysis, benchmark),
     company:          buildCompany(analysis),
     winning_strategy: buildWinningStrategy(analysis),
-  }
+  })
 }
