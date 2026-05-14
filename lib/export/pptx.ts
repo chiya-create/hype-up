@@ -658,46 +658,45 @@ function buildSlide3(
   const avoidAppeals    = (analysis.avoid_appeals    ?? []) as AvoidAppeal[]
 
   // ── Content builders ──────────────────────────────────────────────────────
-  // PPTXは提案サマリー。長文補足（FAQ・深層心理・フレーズ）は表示しない。
-  // 詳細はWebレポート側に任せる。
+  // PPTXは提案サマリー。詳細はWebレポート側に任せる。
+  // 文字数上限: 上段カード1行 ≤ 34字、下段カード1行 ≤ 40字
+  // フォント 8pt × 行間 1.20 で3アイテムが確実に収まる設計。
 
-  // Rating points: "1. label（N件）" — label+count のみ
+  // Rating points: "1.  label（N件）" — 上段3列カード向け最大22字ラベル
   const ratingContent = ratingPoints.length === 0
     ? '（データなし）'
     : ratingPoints.slice(0, 3)
-        .map((rp, i) => `${i + 1}.  ${pptLine(rp.label, 30)}（${rp.count}件）`)
+        .map((rp, i) => `${i + 1}.  ${pptLine(rp.label, 22)}（${rp.count}件）`)
         .join('\n')
 
-  // Complaints: "1. label（N件）" — label+count のみ
+  // Complaints: "1.  label（N件）" — 上段
   const complaintContent = complaints.length === 0
     ? '（データなし）'
     : complaints.slice(0, 3)
-        .map((c, i) => `${i + 1}.  ${pptLine(c.label, 28)}（${c.count}件）`)
+        .map((c, i) => `${i + 1}.  ${pptLine(c.label, 22)}（${c.count}件）`)
         .join('\n')
 
-  // Purchase reasons: "1. label（N件）" — label+count のみ
+  // Purchase reasons: "1.  label（N件）" — 上段
   const purchaseContent = purchaseReasons.length === 0
     ? '（データなし）'
     : purchaseReasons.slice(0, 3)
-        .map((pr, i) => `${i + 1}.  ${pptLine(pr.label, 28)}（${pr.count}件）`)
+        .map((pr, i) => `${i + 1}.  ${pptLine(pr.label, 22)}（${pr.count}件）`)
         .join('\n')
 
-  // Occasion insights: "1. occasion  →  message" — 各1行・計45文字以内
+  // Occasion insights: 想起シーン名のみ。矢印+メッセージは削除して1行確保
   const occasionContent = occasionInsights.length === 0
     ? '（データなし）'
-    : occasionInsights.slice(0, 3).map((oi, i) => {
-        const occ = pptLine(oi.occasion, 18)
-        const msg = oi.recommended_message ? `  →  ${pptLine(oi.recommended_message, 22)}` : ''
-        return `${i + 1}.  ${occ}${msg}`
-      }).join('\n')
+    : occasionInsights.slice(0, 3)
+        .map((oi, i) => `${i + 1}.  ${pptLine(oi.occasion, 24)}`)
+        .join('\n')
 
-  // Avoid appeals: "✗ appeal  →  replacement" — 各1行・計45文字以内
+  // Avoid appeals: 番号形式、捨てる訴求 → 代替訴求。計≤40字
   const avoidContent = avoidAppeals.length === 0
     ? '（データなし）'
-    : avoidAppeals.slice(0, 2).map((aa) => {
-        const ap  = pptLine(aa.appeal, 18)
-        const rep = aa.replacement_message ? `  →  ${pptLine(aa.replacement_message, 22)}` : ''
-        return `✗  ${ap}${rep}`
+    : avoidAppeals.slice(0, 2).map((aa, i) => {
+        const ap  = pptLine(aa.appeal, 14)
+        const rep = aa.replacement_message ? ` → ${pptLine(aa.replacement_message, 18)}` : ''
+        return `${i + 1}.  ${ap}${rep}`
       }).join('\n')
 
   // ── Layout ────────────────────────────────────────────────────────────────
@@ -715,26 +714,27 @@ function buildSlide3(
   const COL2_W  = (W - M * 2 - GAP) / 2        // ≈ 6.37"
 
   // Row 1 — three evidence columns
+  // bodyFontSize 8pt + lineSpacing 1.20: 3アイテム×1行が content 高さ内に確実に収まる
   addCard(pres, slide, {
     x: M,                     y: ROW1_Y, w: COL3_W, h: ROW1_H,
     bg: C.WIN_BG, accent: C.WIN_TITLE, lineColor: C.WIN_LINE,
     labelEn: 'RATING POINTS', labelJa: '評価ポイント Top3',
     content: ratingContent,
-    bodyFontSize: 8.5, lineSpacing: 1.30,
+    bodyFontSize: 8, lineSpacing: 1.20,
   })
   addCard(pres, slide, {
     x: M + COL3_W + GAP,      y: ROW1_Y, w: COL3_W, h: ROW1_H,
     bg: C.ISS_BG, accent: C.ISS_TITLE, lineColor: C.ISS_LINE,
     labelEn: 'COMPLAINTS',    labelJa: '不満点 Top3',
     content: complaintContent,
-    bodyFontSize: 8.5, lineSpacing: 1.30,
+    bodyFontSize: 8, lineSpacing: 1.20,
   })
   addCard(pres, slide, {
     x: M + COL3_W * 2 + GAP * 2, y: ROW1_Y, w: COL3_W, h: ROW1_H,
     bg: 'F8FAFC', accent: '475569', lineColor: 'CBD5E1',
     labelEn: 'PURCHASE REASONS', labelJa: '購入理由 Top3',
     content: purchaseContent,
-    bodyFontSize: 8.5, lineSpacing: 1.30,
+    bodyFontSize: 8, lineSpacing: 1.20,
   })
 
   // Row 2 — occasion insights + avoid appeals
@@ -743,14 +743,14 @@ function buildSlide3(
     bg: 'F0F9FF', accent: '0369A1', lineColor: 'BAE6FD',   // sky
     labelEn: 'OCCASION INSIGHTS', labelJa: '想起シーン Top3',
     content: occasionContent,
-    bodyFontSize: 8.5, lineSpacing: 1.30,
+    bodyFontSize: 8, lineSpacing: 1.20,
   })
   addCard(pres, slide, {
     x: M + COL2_W + GAP, y: ROW2_Y, w: COL2_W, h: ROW2_H,
     bg: C.MKT_BG, accent: C.MKT_TITLE, lineColor: C.MKT_LINE,
     labelEn: 'AVOID APPEALS', labelJa: '捨てるべき訴求 Top2',
     content: avoidContent,
-    bodyFontSize: 8.5, lineSpacing: 1.30,
+    bodyFontSize: 8, lineSpacing: 1.20,
   })
 
   addFooter(pres, slide, 'レビュー分析結果に基づく初期提案資料', FTR_Y, slideNum)

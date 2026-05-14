@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { BarChart3, ArrowLeft, ChevronRight, FileText } from 'lucide-react'
 import { createServerUserClient } from '@/lib/supabase/server'
-import { requireClientAccess } from '@/lib/auth/permissions'
+import { requireClientAccess, isPlatformAdmin } from '@/lib/auth/permissions'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -61,6 +61,7 @@ export default async function ReportPage({
   params: Promise<{ id: string }>
 }) {
   const ctx = await requireClientAccess()
+  const isAdmin = isPlatformAdmin(ctx.role)
   const { id } = await params
   const supabase = await createServerUserClient()
 
@@ -260,13 +261,15 @@ export default async function ReportPage({
           )
         })()}
 
-        {/* ── 品質チェック */}
-        <div className="print:hidden">
-          <h2 className="text-base font-semibold mb-3 text-muted-foreground">
-            このレポートの品質チェック
-          </h2>
-          <QualityCheckCard analysis={analysis} projectId={id} />
-        </div>
+        {/* ── 品質チェック (platform_admin のみ表示) */}
+        {isAdmin && (
+          <div className="print:hidden">
+            <h2 className="text-base font-semibold mb-3 text-muted-foreground">
+              このレポートの品質チェック
+            </h2>
+            <QualityCheckCard analysis={analysis} projectId={id} />
+          </div>
+        )}
 
         {/* ── エグゼクティブサマリー */}
         <ReportSection
