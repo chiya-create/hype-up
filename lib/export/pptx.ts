@@ -152,6 +152,94 @@ function assertPptSafe(text: string, max: number): string {
 }
 
 /**
+ * Wraps Japanese/mixed text into at most maxLines lines of ≤ maxCharsPerLine chars.
+ *
+ * Strategy (priority order):
+ *   1. 文末（。！？）で改行
+ *   2. 読点・中点・矢印（、・→／）で改行
+ *   3. 閉じ括弧（』」）」）で改行
+ *   4. maxCharsPerLine でハードカット
+ *
+ * maxLines を超えた場合のみ最終行に「…」を付加。
+ * それ以外は「…」を使わず意味をできる限り保持する。
+ * Returns lines joined with '\n' for PptxGenJS wrap:true rendering.
+ */
+function wrapJapaneseText(
+  text: string | null | undefined,
+  maxCharsPerLine: number,
+  maxLines: number,
+): string {
+  if (!text) return ''
+  const src = text.trim()
+  if (!src) return ''
+
+  const lines: string[] = []
+  let pos = 0
+  const threshold = Math.floor(maxCharsPerLine * 0.45)
+
+  while (pos < src.length && lines.length < maxLines) {
+    const remaining = src.slice(pos)
+    if (remaining.length <= maxCharsPerLine) {
+      lines.push(remaining)
+      pos = src.length
+      break
+    }
+
+    const chunk = remaining.slice(0, maxCharsPerLine)
+
+    // 1. Sentence boundary
+    const s = Math.max(
+      chunk.lastIndexOf('。'), chunk.lastIndexOf('！'), chunk.lastIndexOf('？'),
+    )
+    if (s >= threshold) {
+      lines.push(remaining.slice(0, s + 1))
+      pos += s + 1
+      while (pos < src.length && (src[pos] === '　' || src[pos] === ' ')) pos++
+      continue
+    }
+
+    // 2. Clause boundary
+    const c = Math.max(
+      chunk.lastIndexOf('、'), chunk.lastIndexOf('・'),
+      chunk.lastIndexOf('→'), chunk.lastIndexOf('／'), chunk.lastIndexOf('/'),
+    )
+    if (c >= threshold) {
+      lines.push(remaining.slice(0, c + 1))
+      pos += c + 1
+      while (pos < src.length && (src[pos] === '　' || src[pos] === ' ')) pos++
+      continue
+    }
+
+    // 3. Closing bracket / space
+    const b = Math.max(
+      chunk.lastIndexOf('』'), chunk.lastIndexOf('」'), chunk.lastIndexOf('）'),
+      chunk.lastIndexOf('　'), chunk.lastIndexOf(' '),
+    )
+    if (b >= threshold) {
+      lines.push(remaining.slice(0, b + 1))
+      pos += b + 1
+      while (pos < src.length && (src[pos] === '　' || src[pos] === ' ')) pos++
+      continue
+    }
+
+    // 4. Hard break
+    lines.push(chunk)
+    pos += maxCharsPerLine
+  }
+
+  // Append '…' only when text was actually truncated
+  if (pos < src.length && lines.length > 0) {
+    const last = lines[lines.length - 1]
+    lines[lines.length - 1] = (last.length >= maxCharsPerLine
+      ? last.slice(0, maxCharsPerLine - 1)
+      : last
+    ) + '…'
+  }
+
+  return lines.join('\n')
+}
+
+/**
  * Converts a long action sentence into a short PPTX-safe title.
  *
  * @param max - character limit (default 35 for Slide 1, pass 28 for Slide 2)
@@ -324,7 +412,9 @@ function addConclusionCard(
     fill: { color: C.CONC_LINE },
     line: { color: C.CONC_LINE, width: 0 },
   })
-  slide.addText(pptSummary(text), {
+  // wrapJapaneseText: 句読点境界で改行し最大3行表示。pptSummary(max=90) より多くの内容を表示可能。
+  // CONC_H=1.25", content h=0.75": 10pt×1.30 → 0.217"/line × 3 = 0.651" ≤ 0.75" ✓
+  slide.addText(wrapJapaneseText(text, 85, 3), {
     x: M + PAD, y: y + 0.45, w: W - M * 2 - PAD * 2, h: h - 0.50,
     fontSize: FS.BODY, color: C.BODY,
     valign: 'top', wrap: true, lineSpacingMultiple: 1.30,
@@ -465,8 +555,8 @@ function buildActionSlide(
 
   let CY = PANEL_Y + 0.50
 
-  // Title — ≤24 chars, 13pt bold, wraps to ~2 lines
-  slide.addText(truncateSentenceForPpt(actionTitleForPpt(ins.suggested_action || ins.insight, 24), 24), {
+  // Title — wrap at 18 chars × 2 lines (36 chars visible), 13pt bold
+  slide.addText(wrapJapaneseText(actionTitleForPpt(ins.suggested_action || ins.insight, 36), 18, 2), {
     x: LCX, y: CY, w: LCW, h: 0.80,
     fontSize: 13, bold: true, color: C.BODY,
     valign: 'top', wrap: true, lineSpacingMultiple: 1.30,
@@ -506,13 +596,13 @@ function buildActionSlide(
   const impact = inferImpact(ins)
 
   // Card 1: やること — blue theme
-  // max 65字 × 9pt × 1.10 line spacing → 確実に1.30" textbox内に収まる
+  // wrapJapaneseText: 45字×4行 = 最大180字表示。content h=1.30" / 9pt*1.10 ≈ 8行分余裕あり
   addCard(pres, slide, {
     x: RIGHT_X, y: PANEL_Y,
     w: RIGHT_W,  h: CARD_H,
     bg: 'EFF6FF', accent: '1D4ED8', lineColor: 'BFDBFE',
     labelEn: 'ACTION', labelJa: '具体的にやること',
-    content: assertPptSafe(truncateSentenceForPpt(ins.suggested_action || ins.insight, 65), 65),
+    content: wrapJapaneseText(ins.suggested_action || ins.insight, 45, 4),
     bodyFontSize: 9, lineSpacing: 1.10,
   })
 
@@ -522,7 +612,7 @@ function buildActionSlide(
     w: RIGHT_W,  h: CARD_H,
     bg: 'F8FAFC', accent: '475569', lineColor: 'CBD5E1',
     labelEn: 'RATIONALE', labelJa: '根拠・インサイト',
-    content: assertPptSafe(truncateSentenceForPpt(ins.rationale, 60), 60),
+    content: wrapJapaneseText(ins.rationale, 45, 4),
     bodyFontSize: 9, lineSpacing: 1.10,
   })
 
@@ -593,16 +683,21 @@ function buildSlide1(
     ...(lpSuggestions[0] ? [`[LP] ${pptTitle(lpSuggestions[0].headline, 20)}`] : []),
     ...(adCopies[0] ? [`[${adCopies[0].platform}] ${pptTitle(adCopies[0].headline, 20)}`] : []),
   ]
-  const issueItems = complaints
-    .slice(0, 3)
-    .map((c) => `${pptTitle(c.label, 22)}（${c.count}件）`)
+  // KEY ISSUES — wrapJapaneseText: ラベルを24字×2行で折り返し、件数を末尾に付加
+  const issueContent = complaints.length === 0
+    ? '（該当データなし）'
+    : complaints.slice(0, 3)
+        .map((c, idx) => `${idx + 1}.  ${wrapJapaneseText(c.label, 24, 2)}（${c.count}件）`)
+        .join('\n')
 
-  // NEXT ACTIONS — max 26文字タイトルのみ（補足なし）
-  const actionItems = [
-    ...highInsights.slice(0, 3).map((i) => actionTitleForPpt(i.suggested_action || i.insight, 26)),
-    ...midInsights.slice(0, 2).map((i) => actionTitleForPpt(i.suggested_action || i.insight, 26)),
+  // NEXT ACTIONS — actionTitleForPpt で最大36文字タイトル抽出
+  const rawActionTitles = [
+    ...highInsights.slice(0, 3).map((ins) => actionTitleForPpt(ins.suggested_action || ins.insight, 36)),
+    ...midInsights.slice(0, 2).map((ins) => actionTitleForPpt(ins.suggested_action || ins.insight, 36)),
   ]
-  const actionContent = nList(actionItems, 3, 30)
+  const actionContent = rawActionTitles.length === 0
+    ? '（該当データなし）'
+    : rawActionTitles.slice(0, 5).map((item, idx) => `${idx + 1}.  ${item}`).join('\n')
 
   // ── Layout ────────────────────────────────────────────────────────────────
   //  Header  y=0.00  h=0.65
@@ -631,7 +726,7 @@ function buildSlide1(
     x: M + COL_W + GAP, y: GRID_Y, w: COL_W, h: GRID_H,
     bg: C.ISS_BG, accent: C.ISS_TITLE, lineColor: C.ISS_LINE,
     labelEn: 'KEY ISSUES', labelJa: '優先課題',
-    content: nList(issueItems, 3, 48),
+    content: issueContent,
   })
   addCard(pres, slide, {
     x: M, y: ACT_Y, w: W - M * 2, h: ACT_H,
@@ -668,45 +763,46 @@ function buildSlide3(
   const avoidAppeals    = (analysis.avoid_appeals    ?? []) as AvoidAppeal[]
 
   // ── Content builders ──────────────────────────────────────────────────────
-  // PPTXは提案サマリー。詳細はWebレポート側に任せる。
-  // 文字数上限: 上段カード1行 ≤ 34字、下段カード1行 ≤ 40字
-  // フォント 8pt × 行間 1.20 で3アイテムが確実に収まる設計。
+  // wrapJapaneseText で自然改行 → truncation より多くの内容を表示。
+  // 上段3列 COL3_W≈4.21" / 8pt / 1.20: 11行分余裕 → 3アイテム×2行で安全。
+  // 下段2列 COL2_W≈6.37" / 8pt / 1.20: 14行分余裕 → 3アイテム×2行で安全。
 
-  // Rating points: "1.  label（N件）" — 上段3列カード向け最大14字ラベル
+  // Rating points — ラベル18字×2行 + 件数
   const ratingContent = ratingPoints.length === 0
     ? '（データなし）'
     : ratingPoints.slice(0, 3)
-        .map((rp, i) => assertPptSafe(`${i + 1}.  ${pptLine(rp.label, 14)}（${rp.count}件）`, 24))
+        .map((rp, i) => `${i + 1}.  ${wrapJapaneseText(rp.label, 18, 2)}（${rp.count}件）`)
         .join('\n')
 
-  // Complaints: "1.  label（N件）" — 上段
+  // Complaints — ラベル18字×2行 + 件数
   const complaintContent = complaints.length === 0
     ? '（データなし）'
     : complaints.slice(0, 3)
-        .map((c, i) => assertPptSafe(`${i + 1}.  ${pptLine(c.label, 14)}（${c.count}件）`, 24))
+        .map((c, i) => `${i + 1}.  ${wrapJapaneseText(c.label, 18, 2)}（${c.count}件）`)
         .join('\n')
 
-  // Purchase reasons: "1.  label（N件）" — 上段
+  // Purchase reasons — ラベル18字×2行 + 件数
   const purchaseContent = purchaseReasons.length === 0
     ? '（データなし）'
     : purchaseReasons.slice(0, 3)
-        .map((pr, i) => assertPptSafe(`${i + 1}.  ${pptLine(pr.label, 14)}（${pr.count}件）`, 24))
+        .map((pr, i) => `${i + 1}.  ${wrapJapaneseText(pr.label, 18, 2)}（${pr.count}件）`)
         .join('\n')
 
-  // Occasion insights: 想起シーン名のみ。矢印+メッセージは削除して1行確保
+  // Occasion insights — シーン名22字×2行
   const occasionContent = occasionInsights.length === 0
     ? '（データなし）'
     : occasionInsights.slice(0, 3)
-        .map((oi, i) => assertPptSafe(`${i + 1}.  ${pptLine(oi.occasion, 22)}`, 28))
+        .map((oi, i) => `${i + 1}.  ${wrapJapaneseText(oi.occasion, 22, 2)}`)
         .join('\n')
 
-  // Avoid appeals: 番号形式、捨てる訴求 → 代替訴求。計≤40字
+  // Avoid appeals — 訴求名＋代替メッセージを28字×2行で表示
   const avoidContent = avoidAppeals.length === 0
     ? '（データなし）'
     : avoidAppeals.slice(0, 2).map((aa, i) => {
-        const ap  = pptLine(aa.appeal, 12)
-        const rep = aa.replacement_message ? ` → ${pptLine(aa.replacement_message, 14)}` : ''
-        return assertPptSafe(`${i + 1}.  ${ap}${rep}`, 28)
+        const combined = aa.replacement_message
+          ? `${aa.appeal} → ${aa.replacement_message}`
+          : aa.appeal
+        return `${i + 1}.  ${wrapJapaneseText(combined, 28, 2)}`
       }).join('\n')
 
   // ── Layout ────────────────────────────────────────────────────────────────

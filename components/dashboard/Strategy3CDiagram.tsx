@@ -14,6 +14,26 @@ function parseBullet(b: string): { label: string | null; value: string } {
     : { label: null, value: b }
 }
 
+/**
+ * 図内カード用の短縮表示 helper。
+ * 句読点（・、。）で自然に切り、最大 max 文字で収める。
+ * 詳細は Strategy3CCard 側に任せる。
+ */
+function diagramLine(text: string, max = 20): string {
+  if (text.length <= max) return text
+  const chunk = text.slice(0, max)
+  // 句読点で自然に切る
+  const lastPunct = Math.max(
+    chunk.lastIndexOf('・'),
+    chunk.lastIndexOf('、'),
+    chunk.lastIndexOf('。'),
+    chunk.lastIndexOf('／'),
+    chunk.lastIndexOf('→'),
+  )
+  if (lastPunct >= Math.floor(max * 0.5)) return chunk.slice(0, lastPunct + 1)
+  return chunk
+}
+
 // ---------------------------------------------------------------------------
 // NodeCard — diagram 内のコンパクトカード
 // ---------------------------------------------------------------------------
@@ -58,11 +78,12 @@ function NodeCard({
           {bullets.slice(0, 3).map((b, i) => {
             const { label, value } = parseBullet(b)
             return (
-              <li key={i} className="text-[9px] leading-snug text-foreground/70">
+              // break-words: 横幅で切れずに折り返す。図内は diagramLine で短縮表示。
+              <li key={i} className="text-[9px] leading-snug text-foreground/70 break-words">
                 {label && (
                   <span className="font-medium text-foreground/80">{label}：</span>
                 )}
-                {value}
+                {diagramLine(value, 18)}
               </li>
             )
           })}

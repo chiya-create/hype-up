@@ -51,11 +51,6 @@ const SECTIONS = [
 // BulletItem — 「ラベル：値」を split してラベルを太字表示
 // ---------------------------------------------------------------------------
 
-/** フェイルセーフ: 省略記号なしでハードカット */
-function safeSlice(s: string, max: number): string {
-  return s.length <= max ? s : s.slice(0, max)
-}
-
 function BulletItem({
   text,
   dot,
@@ -63,15 +58,15 @@ function BulletItem({
   text: string
   dot: string
 }) {
-  // 全角コロン「：」でラベルと値を分割
+  // 全角コロン「：」でラベルと値を分割（truncate なし・自然折り返し）
   const colonIdx = text.indexOf('：')
-  const label = colonIdx > 0 ? safeSlice(text.slice(0, colonIdx), 8) : null
-  const value = colonIdx > 0 ? safeSlice(text.slice(colonIdx + 1), 34) : safeSlice(text, 34)
+  const label = colonIdx > 0 ? text.slice(0, colonIdx) : null
+  const value = colonIdx > 0 ? text.slice(colonIdx + 1) : text
 
   return (
     <li className="flex items-baseline gap-2 text-xs">
       <span className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
-      <span className="leading-[1.6]">
+      <span className="leading-[1.6] break-words min-w-0">
         {label && (
           <span className="font-semibold text-foreground/90">{label}：</span>
         )}
