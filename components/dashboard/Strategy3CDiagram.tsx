@@ -100,59 +100,64 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
   const { customer, competitor, company, winning_strategy } = data
 
   return (
-    // paddingBottom: '60%' → 高さ = 幅 × 0.60、SVG viewBox 0 0 100 60 と対応
-    <div className="relative w-full" style={{ paddingBottom: '60%' }}>
+    // paddingBottom: '64%' → 高さ = 幅 × 0.64、SVG viewBox 0 0 100 64 と対応
+    //
+    // ノード配置とカード高さの計算（幅 1024px 想定）:
+    //   コンテナ高さ ≈ 655px、カード高さ ≈ 19% ≈ 124px
+    //   Customer : top:4%  → 下端23%  (SVG y=6~15)
+    //   Winning  : top:44%, translate-50% → 上端34.5%, 中心44%, 下端53.5%  (SVG y=22~28~34)
+    //   Customer下端(23%) と Winning上端(34.5%) の隙間 ≈ 11.5% ≈ 75px ✅
+    //   Competitor/Company: bottom:6% → 上端75%, 中心84.5%  (SVG y=48~54)
+    <div className="relative w-full" style={{ paddingBottom: '64%' }}>
 
       {/* SVG 接続線レイヤー
-           ─ viewBox 0 0 100 60 → x/y がそのまま CSS %width / %height に対応 ─
-           ノード中心の推定 CSS%:
-             Customer       : (50, 15)  top:4% + card_half≈11% = 15%
-             Competitor     : (13, 84)  bottom:4% → top≈74%, center≈85% (minWidth考慮)
-             Company        : (87, 84)
-             Winning        : (50, 36)  top:36% transform:-50% → center=36%
-           SVG 座標 = CSS% ÷ 100 × viewBox (100×60):
-             Customer : (50, 9)   Competitor: (13, 50)   Company: (87, 50)   Winning: (50, 22)
+           viewBox="0 0 100 64" → x/y 座標 = CSS %width / %height (0-100 / 0-64)
+           ノード中心 SVG座標:
+             Customer : (50,  9)   [CSS 14% → 14/100*64=9]
+             Competitor: (13, 54)  [CSS 84.5% → 54.1]
+             Company  : (87, 54)
+             Winning  : (50, 28)   [CSS 44% → 28.2]
       */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
-        viewBox="0 0 100 60"
+        viewBox="0 0 100 64"
         preserveAspectRatio="none"
         fill="none"
         aria-hidden="true"
       >
         {/* 外周三角形 (破線): Customer–Competitor–Company */}
         <line
-          x1="50" y1="13" x2="16" y2="47"
+          x1="50" y1="15" x2="16" y2="50"
           stroke="currentColor" strokeWidth="0.4"
           strokeDasharray="2.5 1.5" strokeOpacity="0.35"
           className="text-border"
         />
         <line
-          x1="50" y1="13" x2="84" y2="47"
+          x1="50" y1="15" x2="84" y2="50"
           stroke="currentColor" strokeWidth="0.4"
           strokeDasharray="2.5 1.5" strokeOpacity="0.35"
           className="text-border"
         />
         <line
-          x1="21" y1="53" x2="79" y2="53"
+          x1="21" y1="58" x2="79" y2="58"
           stroke="currentColor" strokeWidth="0.4"
           strokeDasharray="2.5 1.5" strokeOpacity="0.35"
           className="text-border"
         />
-        {/* 重心スポーク (実線・紫) — カード端→カード端で隙間を開ける */}
-        {/* Customer(50,9) → Winning(50,22): カード端から端 */}
+        {/* 重心スポーク (実線・紫): カード端 → カード端（重ならないよう余白） */}
+        {/* Customer 下端(y≈15) → Winning 上端(y≈22) */}
         <line
-          x1="50" y1="14" x2="50" y2="19"
+          x1="50" y1="16" x2="50" y2="22"
           stroke="#8b5cf6" strokeWidth="0.7" strokeOpacity="0.65"
         />
-        {/* Competitor(13,50) → Winning(50,22) */}
+        {/* Competitor 上端(y≈48) → Winning 下端(y≈34) */}
         <line
-          x1="18" y1="48" x2="44" y2="26"
+          x1="18" y1="50" x2="44" y2="34"
           stroke="#8b5cf6" strokeWidth="0.7" strokeOpacity="0.65"
         />
-        {/* Company(87,50) → Winning(50,22) */}
+        {/* Company 上端(y≈48) → Winning 下端(y≈34) */}
         <line
-          x1="82" y1="48" x2="56" y2="26"
+          x1="82" y1="50" x2="56" y2="34"
           stroke="#8b5cf6" strokeWidth="0.7" strokeOpacity="0.65"
         />
       </svg>
@@ -176,7 +181,7 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       {/* ── Competitor: bottom left ── */}
       <div
         className="absolute"
-        style={{ bottom: '4%', left: '3%', width: '22%', minWidth: 140 }}
+        style={{ bottom: '6%', left: '3%', width: '22%', minWidth: 140 }}
       >
         <NodeCard
           emoji="⚔️"
@@ -192,7 +197,7 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       {/* ── Company: bottom right ── */}
       <div
         className="absolute"
-        style={{ bottom: '4%', right: '3%', width: '22%', minWidth: 140 }}
+        style={{ bottom: '6%', right: '3%', width: '22%', minWidth: 140 }}
       >
         <NodeCard
           emoji="🌟"
@@ -205,11 +210,11 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
         />
       </div>
 
-      {/* ── Winning Strategy: center-upper (重心より上寄せ) ── */}
-      {/*    top:36% で Customer との距離を縮め「選ばれる理由」感を強調  */}
+      {/* ── Winning Strategy: 中央（Customer 直下、Competitor/Company の上中央） ── */}
+      {/*    top:44%, translate(-50%,-50%) → 中心が44%、Customer下端23%との間に11.5%の余白 */}
       <div
         className="absolute"
-        style={{ top: '36%', left: '50%', transform: 'translate(-50%, -50%)', width: '24%', minWidth: 148 }}
+        style={{ top: '44%', left: '50%', transform: 'translate(-50%, -50%)', width: '24%', minWidth: 148 }}
       >
         <NodeCard
           emoji="⚡"
@@ -224,21 +229,21 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       </div>
 
       {/* ── Edge labels ── */}
-      {/* Customer ↔ Competitor の中間左寄り */}
+      {/* Customer ↔ Competitor の左側中間 */}
       <EdgeBadge
         label="比較される訴求"
-        style={{ left: '15%', top: '40%', transform: 'translateY(-50%)' }}
+        style={{ left: '15%', top: '43%', transform: 'translateY(-50%)' }}
       />
-      {/* Customer ↔ Company の中間右寄り */}
+      {/* Customer ↔ Company の右側中間 */}
       <EdgeBadge
         label="刺さる訴求"
         heart
-        style={{ right: '15%', top: '40%', transform: 'translateY(-50%)' }}
+        style={{ right: '15%', top: '43%', transform: 'translateY(-50%)' }}
       />
       {/* Competitor ↔ Company の下辺中央 */}
       <EdgeBadge
         label="差別化"
-        style={{ left: '50%', bottom: '8%', transform: 'translateX(-50%)' }}
+        style={{ left: '50%', bottom: '9%', transform: 'translateX(-50%)' }}
       />
     </div>
   )
