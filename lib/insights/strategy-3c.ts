@@ -168,6 +168,50 @@ function categorizeAvoid(appeal: string): string {
 }
 
 /**
+ * purchase_reason ラベルを「〜したい / 〜を軽くしたい / 〜をケアしたい」形式の
+ * 自然な欲求文に変換する。cleanLabel / safeJoin 後の値（末尾が助詞で切れた場合を含む）を受け取る。
+ *
+ * 変換例:
+ *   「立ち仕事による脚の疲労・むくみの」→「脚の疲労・むくみを軽くしたい」
+ *   「立ち仕事による脚の疲労・むくみの解消」→「脚の疲労・むくみを軽くしたい」
+ *   「むくみ・冷えによる脚の不快感」→「脚の不快感を軽くしたい」
+ *   「効果実感の遅さ」→「効果実感を求めている」
+ *   「脚のむくみを解消したい」→ そのまま（既に完結）
+ */
+function naturalizeDesireLabel(text: string): string {
+  let s = text.trim()
+  if (!s) return s
+
+  // すでに完結した欲求表現はそのまま返す
+  if (/したい$|ほしい$/.test(s)) return s
+
+  // 「〜による〜」: による の前を全て除去（「立ち仕事による」「むくみ・冷えによる」等）
+  s = s.replace(/^.+による/, '').trim()
+
+  // 末尾の「の＋名詞（解消・軽減・改善等）」を除去
+  s = s.replace(/の(?:解消|軽減|ケア|改善|緩和|不快感?|だるさ)$/, '')
+  // 末尾の単独助詞・区切り文字を除去（「の」「に」「・」等）
+  s = s.replace(/[のにへをがとで・、。]+$/, '').trim()
+
+  // 整形後に空になった場合は元テキストの先頭16字を返す
+  if (!s) return text.trim().replace(/[のにへをがとで・、。]+$/, '').trim()
+
+  // 末尾が動詞形（〜る/〜た）→ 既に完結した表現のためそのまま
+  if (/[るた]$/.test(s)) return s
+
+  // 体感・不快感系 → 「を軽くしたい」
+  if (/疲労|むくみ|浮腫|だるさ|重さ|不快|冷え/.test(s)) return `${s}を軽くしたい`
+  // 肌・美容系 → 「をケアしたい」
+  if (/肌|毛穴|乾燥|保湿|ツヤ|セルライト|美容/.test(s)) return `${s}をケアしたい`
+  // 効果・実感系 → 「を実感したい」
+  if (/効果|実感/.test(s)) return `${s}を実感したい`
+  // 「〜さ/〜感/〜力」等の名詞形で終わる → そのまま（自然な名詞句として完結）
+  if (/[さ感力度]$/.test(s)) return s
+  // その他: そのまま
+  return s
+}
+
+/**
  * complaint.label を自然な「悩み表現」に変換。
  * "セルライト対策の即効性" → "即効性への期待"、"価格" → "価格不安" など。
  */
@@ -241,9 +285,11 @@ function buildCustomer(analysis: ProjectAnalysis): Strategy3CSection {
   const complaintVals = complaints.slice(0, 3).map((c) => naturalizeComplaint(c.label))
   const complaintVal  = safeJoin(complaintVals, '・', 26)
 
-  // 欲求：purchase_reasons.label を cleanLabel して2件まで（max 16: 語末カット防止）
-  const reasonVals = purchaseReasons.slice(0, 2).map((pr) => cleanLabel(pr.label, 16))
-  const reasonVal  = safeJoin(reasonVals, '・', 28)
+  // 欲求：cleanLabel → safeJoin → naturalizeDesireLabel で完全な欲求文に変換
+  // max 20: 「立ち仕事による脚の疲労・むくみの解消」(18字) を語中カットせず保持
+  const reasonVals = purchaseReasons.slice(0, 2).map((pr) => cleanLabel(pr.label, 20))
+  const reasonRaw  = safeJoin(reasonVals, '・', 32)
+  const reasonVal  = naturalizeDesireLabel(reasonRaw)
 
   // 想起：occasion_insights.occasion 1件
   const occasionVal = hardCut(cleanLabel(occasionInsights[0]?.occasion, 22), 22)
