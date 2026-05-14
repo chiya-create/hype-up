@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" fill="none">
+  <g fill="#555">
+    <!-- Afro/round hair: large dome -->
+    <circle cx="100" cy="72" r="60"/>
+    <!-- Face (white oval cutout) -->
+    <ellipse cx="100" cy="80" rx="32" ry="36" fill="white"/>
+    <!-- Eyes -->
+    <circle cx="88" cy="74" r="4.5"/>
+    <circle cx="112" cy="74" r="4.5"/>
+    <!-- Nose -->
+    <circle cx="100" cy="85" r="2.2"/>
+    <!-- Mouth -->
+    <path d="M90 94 Q100 100 110 94" stroke="#555" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <!-- Neck -->
+    <rect x="88" y="116" width="24" height="16" rx="4"/>
+    <!-- T-shirt body (crew neck) -->
+    <path d="M60 132 C50 138 40 148 38 164 L162 164 C160 148 150 138 140 132
+             C130 128 118 128 100 128 C82 128 70 128 60 132 Z"/>
+    <!-- Crew neck -->
+    <path d="M78 128 Q100 136 122 128" stroke="#555" stroke-width="3" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

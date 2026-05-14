@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" fill="none">
+  <g fill="#555">
+    <!-- Bob hair: top dome -->
+    <path d="M100 18 C68 18 46 38 44 64 C44 70 45 76 47 82
+             C42 84 38 90 38 96 C38 104 44 108 50 108
+             C50 116 55 126 55 134 L145 134 C145 126 150 116 150 108
+             C156 108 162 104 162 96 C162 90 158 84 153 82
+             C155 76 156 70 156 64 C154 38 132 18 100 18 Z"/>
+    <!-- Bob side curl left -->
+    <ellipse cx="46" cy="108" rx="9" ry="16" transform="rotate(10 46 108)"/>
+    <!-- Bob side curl right -->
+    <ellipse cx="154" cy="108" rx="9" ry="16" transform="rotate(-10 154 108)"/>
+    <!-- Face (white) -->
+    <ellipse cx="100" cy="76" rx="34" ry="38" fill="white"/>
+    <!-- Eyes -->
+    <circle cx="88" cy="70" r="4.5"/>
+    <circle cx="112" cy="70" r="4.5"/>
+    <!-- Nose -->
+    <circle cx="100" cy="81" r="2.2"/>
+    <!-- Mouth -->
+    <path d="M89 90 Q100 97 111 90" stroke="#555" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <!-- Collar / body -->
+    <path d="M55 134 C55 134 44 140 36 158 L164 158 C156 140 145 134 145 134
+             L122 142 L100 148 L78 142 Z"/>
+    <!-- Shirt buttons -->
+    <circle cx="100" cy="152" r="2.5" fill="white"/>
+    <circle cx="100" cy="162" r="2.5" fill="white"/>
+  </g>
+</svg>

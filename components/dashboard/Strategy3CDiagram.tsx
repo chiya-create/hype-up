@@ -19,7 +19,10 @@ function parseBullet(b: string): { label: string | null; value: string } {
 // ---------------------------------------------------------------------------
 
 interface NodeCardProps {
+  /** 絵文字フォールバック（iconSrc がない場合に使用） */
   emoji: string
+  /** 人物アイコン画像の src（public配下からの絶対パス） */
+  iconSrc?: string
   role: string    // 補助ラベル: "好きな人（顧客）" など
   title: string   // "Customer" など
   bullets: string[]
@@ -30,12 +33,23 @@ interface NodeCardProps {
 }
 
 function NodeCard({
-  emoji, role, title, bullets, borderCls, bgCls = '', titleCls, roleCls,
+  emoji, iconSrc, role, title, bullets, borderCls, bgCls = '', titleCls, roleCls,
 }: NodeCardProps) {
   return (
     <div className={`rounded-xl border bg-white dark:bg-card shadow-sm p-2.5 ${borderCls} ${bgCls}`}>
       <div className="text-center mb-1.5">
-        <span className="text-xl leading-none">{emoji}</span>
+        {iconSrc ? (
+          /* 人物アイコン画像: PC 52px / モバイル 44px */
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={iconSrc}
+            alt={role}
+            className="mx-auto w-11 h-11 md:w-13 md:h-13 object-contain"
+            style={{ width: '52px', height: '52px' }}
+          />
+        ) : (
+          <span className="text-xl leading-none">{emoji}</span>
+        )}
         <p className={`mt-0.5 text-[9px] font-medium leading-tight ${roleCls}`}>{role}</p>
         <p className={`text-[11px] font-semibold leading-tight mt-0.5 ${titleCls}`}>{title}</p>
       </div>
@@ -71,11 +85,11 @@ interface EdgeBadgeProps {
 function EdgeBadge({ label, heart, style }: EdgeBadgeProps) {
   return (
     <div
-      className="absolute z-10 flex items-center gap-1 rounded-full border border-border bg-white dark:bg-card shadow-sm px-3 py-1.5 text-xs font-semibold text-foreground/75 whitespace-nowrap pointer-events-none"
+      className="absolute z-10 flex items-center gap-1.5 rounded-full border border-border/80 bg-white dark:bg-card shadow-md px-4 py-2 text-sm font-bold text-foreground/80 whitespace-nowrap pointer-events-none"
       style={style}
     >
       {heart && (
-        <Heart className="h-3 w-3 flex-shrink-0 fill-rose-400 stroke-none" />
+        <Heart className="h-3.5 w-3.5 flex-shrink-0 fill-rose-400 stroke-none" />
       )}
       {label}
     </div>
@@ -170,6 +184,7 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       >
         <NodeCard
           emoji="💗"
+          iconSrc="/strategy-icons/customer-girl.svg"
           role="好きな人（顧客）"
           title="Customer"
           bullets={customer.bullets}
@@ -186,6 +201,7 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       >
         <NodeCard
           emoji="⚔️"
+          iconSrc="/strategy-icons/competitor-boy.svg"
           role="ライバル（競合）"
           title="Competitor"
           bullets={competitor.bullets}
@@ -202,6 +218,7 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       >
         <NodeCard
           emoji="🌟"
+          iconSrc="/strategy-icons/company-student.svg"
           role="自分（自社）"
           title="Company"
           bullets={company.bullets}
@@ -262,6 +279,7 @@ function MobileStack({ data }: { data: Strategy3C }) {
     <div className="space-y-3">
       <NodeCard
         emoji="💗"
+        iconSrc="/strategy-icons/customer-girl.svg"
         role="好きな人（顧客）"
         title="Customer"
         bullets={customer.bullets}
@@ -282,6 +300,7 @@ function MobileStack({ data }: { data: Strategy3C }) {
       <div className="grid grid-cols-2 gap-3">
         <NodeCard
           emoji="⚔️"
+          iconSrc="/strategy-icons/competitor-boy.svg"
           role="ライバル（競合）"
           title="Competitor"
           bullets={competitor.bullets}
@@ -291,6 +310,7 @@ function MobileStack({ data }: { data: Strategy3C }) {
         />
         <NodeCard
           emoji="🌟"
+          iconSrc="/strategy-icons/company-student.svg"
           role="自分（自社）"
           title="Company"
           bullets={company.bullets}
