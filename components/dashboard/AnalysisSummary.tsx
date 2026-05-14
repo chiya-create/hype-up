@@ -215,7 +215,7 @@ export function AnalysisSummary({ analysis }: AnalysisSummaryProps) {
           <Clock className="h-8 w-8 text-muted-foreground mx-auto" />
           <p className="font-medium text-muted-foreground">分析待ち</p>
           <p className="text-sm text-muted-foreground">
-            「分析を開始」ボタンを押すと、AI による分析が実行されます。
+            「分析を開始」ボタンを押すと、分析が実行されます。
           </p>
         </CardContent>
       </Card>
@@ -236,7 +236,7 @@ export function AnalysisSummary({ analysis }: AnalysisSummaryProps) {
       {analysis.summary && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">AI 総評</CardTitle>
+            <CardTitle className="text-base">総評</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm leading-relaxed text-muted-foreground">

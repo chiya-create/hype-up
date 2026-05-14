@@ -159,7 +159,7 @@ export default async function CompareReportPage({
         {/* 免責事項 */}
         <div className="pt-4 border-t space-y-2 text-center">
           <p className="text-xs text-muted-foreground">
-            本比較レポートは、選択されたプロジェクトのレビュー分析結果をもとにAIが比較したものです。競合優位性の判断には、価格・広告・販売チャネル等の外部情報も合わせて確認してください。
+            本比較レポートは、選択されたプロジェクトのレビュー分析結果をもとにした比較です。競合優位性の判断には、価格・広告・販売チャネル等の外部情報も合わせて確認してください。
           </p>
           <p className="text-xs text-muted-foreground">
             Powered by Hype Up AI · {formatDateTime(report.created_at)}

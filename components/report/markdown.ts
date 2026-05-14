@@ -413,7 +413,7 @@ export function generateProjectReportMarkdown(
   // 免責
   // ──────────────────────────────────────────────────
   lines.push(h3('免責'))
-  lines.push('_このレポートは AI による自動分析結果です。最終的な施策判断は担当者が行ってください。_')
+  lines.push('_本レポートはアップロードされたレビューをもとにした分析結果です。最終的な施策判断は担当者が行ってください。_')
   lines.push('')
 
   return lines.join('\n')

@@ -94,7 +94,7 @@ export default async function HomePage() {
             レビューをマーケティング戦略に変える
           </h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            商品レビューの CSV をアップロードするだけで、AI が評価ポイント・不満点・購買理由・顧客タイプ・訴求ワードを自動分析。LP や広告コピーの改善提案も生成します。
+            商品レビューの CSV をアップロードするだけで、評価ポイント・不満点・購買理由・顧客タイプ・訴求ワードを自動分析。LP や広告コピーの改善提案も生成します。
           </p>
 
           <div className="flex flex-wrap justify-center gap-4 pt-2">

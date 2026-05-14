@@ -342,7 +342,7 @@ export default async function ProjectDetailPage({
               <p className="text-sm text-muted-foreground">
                 {status === 'error'
                   ? '「再分析を実行」ボタンで再試行できます。'
-                  : '「分析を開始」ボタンを押すと、AI による分析が実行されます。'}
+                  : '「分析を開始」ボタンを押すと、分析が実行されます。'}
               </p>
             </div>
           )}

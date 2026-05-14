@@ -253,7 +253,7 @@ export default async function ProjectOnePagerPage({
 
           {/* 免責 */}
           <p className="text-[10px] text-muted-foreground text-center pt-1">
-            本サマリーはアップロードされたレビューをもとにAIが分析した結果です。最終的な施策判断は、商材特性・事業状況・追加調査と合わせてご判断ください。
+            本サマリーはアップロードされたレビューをもとにした分析結果です。最終的な施策判断は、商材特性・事業状況・追加調査と合わせてご判断ください。
           </p>
         </div>
       </OnePagerLayout>

@@ -274,7 +274,7 @@ export default async function ReportPage({
         {/* ── エグゼクティブサマリー */}
         <ReportSection
           title="エグゼクティブサマリー"
-          description="AI が全レビューを読み込み、マーケティング視点で総合評価したサマリーです"
+          description="レビュー全体をもとにしたマーケティング視点での総合評価です"
         >
           {analysis.summary ? (
             <p className="text-base leading-relaxed">{analysis.summary}</p>
@@ -758,7 +758,7 @@ export default async function ReportPage({
         {/* フッター */}
         <div className="pt-6 border-t text-center space-y-2">
           <p className="text-xs text-muted-foreground">
-            本レポートはアップロードされたレビューをもとにAIが分析した結果です。最終的な施策判断は、商材特性・事業状況・追加調査と合わせてご判断ください。
+            本レポートはアップロードされたレビューをもとにした分析結果です。最終的な施策判断は、商材特性・事業状況・追加調査と合わせてご判断ください。
           </p>
           <p className="text-xs text-muted-foreground">
             Powered by Hype Up AI · {formatDateTime(project.analysis_completed_at)}

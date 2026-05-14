@@ -173,7 +173,7 @@ export default async function CompareOnePagerPage({
 
           {/* 免責 */}
           <p className="text-[10px] text-muted-foreground text-center pt-1">
-            本比較サマリーは選択されたプロジェクトのレビュー分析結果をもとにAIが比較したものです。競合優位性の判断には、価格・広告・販売チャネル等の外部情報も合わせて確認してください。
+            本比較サマリーは選択されたプロジェクトのレビュー分析結果をもとにした比較です。競合優位性の判断には、価格・広告・販売チャネル等の外部情報も合わせて確認してください。
           </p>
         </div>
       </OnePagerLayout>
