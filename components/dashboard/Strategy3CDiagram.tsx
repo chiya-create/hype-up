@@ -37,20 +37,20 @@ function NodeCard({
 }: NodeCardProps) {
   return (
     <div className={`rounded-xl border bg-white dark:bg-card shadow-sm p-2.5 ${borderCls} ${bgCls}`}>
-      <div className="text-center mb-1.5">
+      <div className="text-center mb-2">
         {iconSrc ? (
-          /* 人物アイコン画像: PC 52px / モバイル 44px */
+          /* 人物アイコン画像: PC 60px / モバイル 48px */
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={iconSrc}
             alt={role}
-            className="mx-auto w-11 h-11 md:w-13 md:h-13 object-contain"
-            style={{ width: '52px', height: '52px' }}
+            className="mx-auto object-contain"
+            style={{ width: '60px', height: '60px' }}
           />
         ) : (
-          <span className="text-xl leading-none">{emoji}</span>
+          <span className="text-2xl leading-none">{emoji}</span>
         )}
-        <p className={`mt-0.5 text-[9px] font-medium leading-tight ${roleCls}`}>{role}</p>
+        <p className={`mt-1 text-[9px] font-medium leading-tight ${roleCls}`}>{role}</p>
         <p className={`text-[11px] font-semibold leading-tight mt-0.5 ${titleCls}`}>{title}</p>
       </div>
       {bullets.length > 0 && (
@@ -184,7 +184,7 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       >
         <NodeCard
           emoji="💗"
-          iconSrc="/strategy-icons/customer-girl.svg"
+          iconSrc="/strategy-icons/customer-girl.png"
           role="好きな人（顧客）"
           title="Customer"
           bullets={customer.bullets}
@@ -201,7 +201,7 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       >
         <NodeCard
           emoji="⚔️"
-          iconSrc="/strategy-icons/competitor-boy.svg"
+          iconSrc="/strategy-icons/competitor-boy.png"
           role="ライバル（競合）"
           title="Competitor"
           bullets={competitor.bullets}
@@ -218,7 +218,7 @@ function TriangleDiagram({ data }: { data: Strategy3C }) {
       >
         <NodeCard
           emoji="🌟"
-          iconSrc="/strategy-icons/company-student.svg"
+          iconSrc="/strategy-icons/company-student.png"
           role="自分（自社）"
           title="Company"
           bullets={company.bullets}
@@ -279,7 +279,7 @@ function MobileStack({ data }: { data: Strategy3C }) {
     <div className="space-y-3">
       <NodeCard
         emoji="💗"
-        iconSrc="/strategy-icons/customer-girl.svg"
+        iconSrc="/strategy-icons/customer-girl.png"
         role="好きな人（顧客）"
         title="Customer"
         bullets={customer.bullets}
@@ -300,7 +300,7 @@ function MobileStack({ data }: { data: Strategy3C }) {
       <div className="grid grid-cols-2 gap-3">
         <NodeCard
           emoji="⚔️"
-          iconSrc="/strategy-icons/competitor-boy.svg"
+          iconSrc="/strategy-icons/competitor-boy.png"
           role="ライバル（競合）"
           title="Competitor"
           bullets={competitor.bullets}
@@ -310,7 +310,7 @@ function MobileStack({ data }: { data: Strategy3C }) {
         />
         <NodeCard
           emoji="🌟"
-          iconSrc="/strategy-icons/company-student.svg"
+          iconSrc="/strategy-icons/company-student.png"
           role="自分（自社）"
           title="Company"
           bullets={company.bullets}
