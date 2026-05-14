@@ -15,14 +15,12 @@ function parseBullet(b: string): { label: string | null; value: string } {
 }
 
 /**
- * 図内カード用の短縮表示 helper。
- * 句読点（・、。）で自然に切り、最大 max 文字で収める。
- * 詳細は Strategy3CCard 側に任せる。
+ * 図内カード用フォールバック: 句読点境界で max 文字以内に収める（character-based）。
+ * diagramValue() が先に意味単位の圧縮を試み、超えた場合のみ呼ばれる。
  */
-function diagramLine(text: string, max = 20): string {
+function diagramLine(text: string, max = 18): string {
   if (text.length <= max) return text
   const chunk = text.slice(0, max)
-  // 句読点で自然に切る
   const lastPunct = Math.max(
     chunk.lastIndexOf('・'),
     chunk.lastIndexOf('、'),
@@ -30,9 +28,72 @@ function diagramLine(text: string, max = 20): string {
     chunk.lastIndexOf('／'),
     chunk.lastIndexOf('→'),
   )
-  // lastPunct+1 ではなく lastPunct: 末尾の区切り文字（・、。／→）を含めない
   if (lastPunct >= Math.floor(max * 0.5)) return chunk.slice(0, lastPunct)
   return chunk
+}
+
+/**
+ * 末尾の区切り文字・不自然な助詞を除去し、よくある語中カットパターンを補正する。
+ * 「むく」→「むくみ」、「価格がネ」→「価格負担」など。
+ */
+function cleanDiagramEnding(text: string): string {
+  const FIXES: [RegExp, string][] = [
+    [/むく$/, 'むくみ'],
+    [/価格がネ$/, '価格負担'],
+    [/きっかけにな$/, 'きっかけ'],
+  ]
+  let s = text.trim()
+  for (const [pat, rep] of FIXES) s = s.replace(pat, rep)
+  // 末尾の区切り文字（連続も含む）を除去
+  s = s.replace(/[・、。／→]+$/, '')
+  // 末尾に残った単独の助詞を除去（「脚の」「価格が」などの切れ残り防止）
+  s = s.replace(/[へをにがのとなで]$/, '')
+  return s.trim()
+}
+
+/**
+ * 図内表示用: 1項目（「・」なし）を意味単位の短文に圧縮する。
+ * ・「〜による」プレフィックスを除去
+ * ・よく出る冗長フレーズを短縮
+ */
+function compressDiagramItem(item: string): string {
+  const REDUCTIONS: [RegExp, string][] = [
+    // 具体的な短縮パターン
+    [/低評価レビュー増加/, '低評価リスク'],
+    [/返品クレーム増加?/, '返品リスク'],
+    [/景品表示法上の?/, ''],
+    [/^広$/, '広告リスク'],
+    [/効果実感の遅さ/, '効果実感'],
+    [/マッサージ習慣の/, ''],
+    // 「〜による」プレフィックスを除去（立ち仕事による、産後による、etc.）
+    [/^[^\s]{1,6}による/, ''],
+  ]
+  let s = item.trim()
+  for (const [pat, rep] of REDUCTIONS) s = s.replace(pat, rep).trim()
+  return cleanDiagramEnding(s || item.trim())
+}
+
+/**
+ * 図内カード専用の値短縮ヘルパー。
+ * 1. 「・」で分割して各項目を意味単位に圧縮（compressDiagramItem）
+ * 2. maxItems 件（デフォルト2）に絞り、maxChars 以内なら採用
+ * 3. 1件でも超える場合は diagramLine でフォールバック
+ *
+ * 文字数で途中カットせず、「項目数を減らす」ことで長さを調整する。
+ */
+function diagramValue(rawValue: string, maxItems = 2, maxChars = 18): string {
+  const items = rawValue.split('・').map((s) => s.trim()).filter(Boolean)
+  const compressed = items.map(compressDiagramItem)
+
+  // maxItems → 1 の順で試す
+  for (let n = Math.min(maxItems, compressed.length); n >= 1; n--) {
+    const candidate = cleanDiagramEnding(compressed.slice(0, n).join('・'))
+    if (candidate.length <= maxChars) return candidate
+  }
+
+  // 最終フォールバック: 先頭1項目を diagramLine でトリム
+  const first = cleanDiagramEnding(compressed[0] ?? rawValue)
+  return diagramLine(first, maxChars)
 }
 
 // ---------------------------------------------------------------------------
@@ -79,12 +140,12 @@ function NodeCard({
           {bullets.slice(0, 3).map((b, i) => {
             const { label, value } = parseBullet(b)
             return (
-              // break-words: 横幅で切れずに折り返す。図内は diagramLine で短縮表示。
+              // diagramValue: 意味単位で圧縮（文字途中カットなし）→ 必要なら diagramLine フォールバック
               <li key={i} className="text-[9px] leading-snug text-foreground/70 break-words">
                 {label && (
                   <span className="font-medium text-foreground/80">{label}：</span>
                 )}
-                {diagramLine(value, 18)}
+                {diagramValue(value)}
               </li>
             )
           })}

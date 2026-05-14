@@ -241,9 +241,9 @@ function buildCustomer(analysis: ProjectAnalysis): Strategy3CSection {
   const complaintVals = complaints.slice(0, 3).map((c) => naturalizeComplaint(c.label))
   const complaintVal  = safeJoin(complaintVals, '・', 26)
 
-  // 欲求：purchase_reasons.label を cleanLabel して2件まで
-  const reasonVals = purchaseReasons.slice(0, 2).map((pr) => cleanLabel(pr.label, 14))
-  const reasonVal  = safeJoin(reasonVals, '・', 26)
+  // 欲求：purchase_reasons.label を cleanLabel して2件まで（max 16: 語末カット防止）
+  const reasonVals = purchaseReasons.slice(0, 2).map((pr) => cleanLabel(pr.label, 16))
+  const reasonVal  = safeJoin(reasonVals, '・', 28)
 
   // 想起：occasion_insights.occasion 1件
   const occasionVal = hardCut(cleanLabel(occasionInsights[0]?.occasion, 22), 22)
@@ -311,9 +311,9 @@ function buildCompetitor(
     .map((c) => naturalizeComplaint(c.label))
   const compVal = safeJoin(compVals, '・', 26)
 
-  // 注意：avoid_appeals[0].risk/reason を cleanLabel
+  // 注意：avoid_appeals[0].risk/reason — max 30 で語中カットを防ぐ（diagramValue 側で圧縮）
   const cautionRaw = avoidAppeals[0]?.risk || avoidAppeals[0]?.reason || ''
-  const cautionVal = cautionRaw ? hardCut(cleanLabel(cautionRaw, 20), 20) : null
+  const cautionVal = cautionRaw ? hardCut(cleanLabel(cautionRaw, 30), 30) : null
 
   const bullets = [
     bul('一般化', generalVal),
