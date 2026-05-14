@@ -144,9 +144,12 @@ export default async function ProjectDetailPage({
               >
                 {STATUS_LABEL[status]}
               </Badge>
-              <Badge variant="outline" className="text-xs font-normal">
-                {INDUSTRY_TEMPLATES[(project.industry ?? 'general') as IndustryId]?.label ?? project.industry}
-              </Badge>
+              {/* 汎用（general）は表示不要 */}
+              {project.industry && project.industry !== 'general' && (
+                <Badge variant="outline" className="text-xs font-normal">
+                  {INDUSTRY_TEMPLATES[project.industry as IndustryId]?.label ?? project.industry}
+                </Badge>
+              )}
             </div>
             {project.description && (
               <p className="text-muted-foreground text-sm">{project.description}</p>

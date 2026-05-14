@@ -30,7 +30,8 @@ function diagramLine(text: string, max = 20): string {
     chunk.lastIndexOf('／'),
     chunk.lastIndexOf('→'),
   )
-  if (lastPunct >= Math.floor(max * 0.5)) return chunk.slice(0, lastPunct + 1)
+  // lastPunct+1 ではなく lastPunct: 末尾の区切り文字（・、。／→）を含めない
+  if (lastPunct >= Math.floor(max * 0.5)) return chunk.slice(0, lastPunct)
   return chunk
 }
 

@@ -46,17 +46,56 @@ export interface AggregatedInsightRow {
 }
 
 // ---------------------------------------------------------------------------
-// Interpretations
+// Interpretations — insight_type × benchmark_level で出し分け
 // ---------------------------------------------------------------------------
 
-const INTERPRETATIONS: Record<BenchmarkLevel, string> = {
-  common:
-    '同業界でもよく見られる傾向です。差別化要素というより、最低限押さえるべき訴求・課題として扱うのが良さそうです。',
-  emerging:
-    '同業界でも一部見られる傾向です。今後伸びる可能性がある論点として注視できます。',
-  unique:
-    '現時点の集計データでは目立っていない傾向です。競合との差別化要素になる可能性があります。',
-  unknown: '比較できるデータが不足しています。',
+type InsightTypeKey = 'rating_point' | 'complaint' | 'purchase_reason' | 'appeal_word'
+
+const INTERPRETATIONS: Record<BenchmarkLevel, Partial<Record<InsightTypeKey, string>> & { _default: string }> = {
+  common: {
+    rating_point:
+      'LP・広告で最低限押さえるべき基本訴求です。差別化よりも土台固めとして活用しましょう。',
+    complaint:
+      '購入前の不安や離脱要因として業界共通で見られます。FAQやLP内の補足説明で先回りして解消するのが良さそうです。',
+    purchase_reason:
+      '購入決定に関わる動機として業界全体で共通しています。ファーストビューやお客様の声に反映すると購入意欲を高めやすくなります。',
+    appeal_word:
+      '広告・LP・SNSで広く使われている表現です。使うべき言葉として押さえつつ、自社らしい切り口を加えると差別化になります。',
+    _default:
+      '同業界でもよく見られる傾向です。差別化よりも最低限押さえるべき基本として扱うのが良さそうです。',
+  },
+  emerging: {
+    rating_point:
+      '自社レビューで目立ち始めている評価ポイントです。競合がまだ強く打ち出していなければ、差別化訴求として使える可能性があります。',
+    complaint:
+      '今後増える可能性がある不満論点です。競合より先に対策を打てると、信頼感の向上につながります。',
+    purchase_reason:
+      '伸び始めている購入動機です。このニーズを先取りしたメッセージングで購入率の向上が狙えます。',
+    appeal_word:
+      '広まりつつある訴求ワードです。今のうちに広告・LPで使い始めると先行者優位を取れる可能性があります。',
+    _default:
+      '同業界でも一部見られ始めている傾向です。今後伸びる可能性がある論点として注視しましょう。',
+  },
+  unique: {
+    rating_point:
+      '自社レビューで相対的に強く出ているポイントです。広告見出しやファーストビューで優先的に検証する価値があります。',
+    complaint:
+      '自社特有の不満です。早期に改善または説明を加えることで、競合との差別化ポイントに転換できる可能性があります。',
+    purchase_reason:
+      '自社ならではの購入動機です。独自の訴求軸として、LPや広告コピーの中心に据えることを検討してください。',
+    appeal_word:
+      '自社に特有の訴求ワードです。広告見出しやキャッチコピーとして積極的にテストする価値があります。',
+    _default:
+      '現時点の集計データでは目立っていない傾向です。競合との差別化要素になる可能性があります。',
+  },
+  unknown: {
+    _default: '比較できるデータが不足しています。',
+  },
+}
+
+function getInterpretation(level: BenchmarkLevel, insightType: string): string {
+  const map = INTERPRETATIONS[level]
+  return (map[insightType as InsightTypeKey] ?? map._default)
 }
 
 // insight_type 変換（DB側は単数形、分析軸は複数形）
@@ -98,7 +137,7 @@ function buildAxisItems(
         industry_count: industryCount,
         confidence_score: matched?.confidence_score ?? null,
         benchmark_level: level,
-        interpretation: INTERPRETATIONS[level],
+        interpretation: getInterpretation(level, insightType),
       }
     })
     .sort((a, b) => {

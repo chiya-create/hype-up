@@ -198,14 +198,14 @@ function wrapJapaneseText(
       continue
     }
 
-    // 2. Clause boundary
+    // 2. Clause boundary — セパレータ自体は行末に含めない (c+1 ではなく c)
     const c = Math.max(
       chunk.lastIndexOf('、'), chunk.lastIndexOf('・'),
       chunk.lastIndexOf('→'), chunk.lastIndexOf('／'), chunk.lastIndexOf('/'),
     )
     if (c >= threshold) {
-      lines.push(remaining.slice(0, c + 1))
-      pos += c + 1
+      lines.push(remaining.slice(0, c))   // drop the separator char from line end
+      pos += c + 1                        // skip past the separator
       while (pos < src.length && (src[pos] === '　' || src[pos] === ' ')) pos++
       continue
     }

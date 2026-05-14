@@ -302,13 +302,13 @@ function buildCompetitor(
     : (benchmark?.rating_points ?? []).slice(0, 3).map((r) => cleanLabel(r.label, 12))
   const generalVal = safeJoin(generalVals, '・', 26)
 
-  // 比較軸：比較・価格系 complaints を cleanLabel して2件まで
+  // 比較軸：naturalizeComplaint で自然な短文に変換して2件まで（hardCut回避）
   const compSource = complaints
     .filter((c) => /価格|比較|期待|高い|安い|容量|品質/.test(c.label))
     .slice(0, 3)
   const compFallback = complaints.slice(0, 3)
   const compVals = (compSource.length ? compSource : compFallback)
-    .map((c) => cleanLabel(c.label, 10))
+    .map((c) => naturalizeComplaint(c.label))
   const compVal = safeJoin(compVals, '・', 26)
 
   // 注意：avoid_appeals[0].risk/reason を cleanLabel
@@ -361,9 +361,9 @@ function buildCompany(analysis: ProjectAnalysis): Strategy3CSection {
   const appealWords  = (analysis.appeal_words  ?? []) as AppealWord[]
   const demandPoints = (analysis.demand_points ?? []) as DemandPoint[]
 
-  // 強み：rating_points.label を cleanLabel して2件まで
-  const strengthVals = ratingPoints.slice(0, 3).map((rp) => cleanLabel(rp.label, 12))
-  const strengthVal  = safeJoin(strengthVals, '・', 26)
+  // 強み：rating_points.label を cleanLabel して2件まで（max 14: 語末カット防止）
+  const strengthVals = ratingPoints.slice(0, 3).map((rp) => cleanLabel(rp.label, 14))
+  const strengthVal  = safeJoin(strengthVals, '・', 28)
   // 言葉：appeal_words.word 3件まで
   const wordVals = appealWords.slice(0, 4).map((w) => hardCut(w.word, 10))
   const wordVal  = safeJoin(wordVals, '・', 26)
