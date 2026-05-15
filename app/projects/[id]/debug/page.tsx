@@ -12,6 +12,7 @@ import {
 // TODO(Phase 3): createServerUserClient() に切り替え後、RLS ポリシーで analysis_chunks / reviews を自組織に制限する
 // service role を維持: デバッグ画面は全チャンク・全レビューデータが必要なため
 import { createServiceClient } from '@/lib/supabase/service'
+import { getCurrentUserAccessContext, isPlatformAdmin } from '@/lib/auth/permissions'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -379,6 +380,11 @@ export default async function DebugPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+
+  // platform_admin 以外はアクセス不可
+  const ctx = await getCurrentUserAccessContext()
+  if (!isPlatformAdmin(ctx.role)) notFound()
+
   const supabase = createServiceClient()
 
   const [{ data: project }, { data: chunks }, { data: analysisRow }] =
