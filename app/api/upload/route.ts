@@ -7,6 +7,25 @@ import type { IndustryId } from '@/lib/constants'
 import { logUsageEvent } from '@/lib/usage/log'
 import { getCurrentUserAccessContext } from '@/lib/auth/permissions'
 
+// Step 87-D: review_sources 紐づけのために SupabaseClient の型を取得
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+/**
+ * アップロード失敗時のロールバックヘルパー。
+ * review_sources は project.ON DELETE SET NULL のため project 削除では消えない。
+ * reviewSourceId が確定している場合は明示的に削除する。
+ */
+async function rollback(
+  supabase: SupabaseClient,
+  projectId: string,
+  reviewSourceId: string | null,
+): Promise<void> {
+  if (reviewSourceId) {
+    await supabase.from('review_sources').delete().eq('id', reviewSourceId)
+  }
+  await supabase.from('projects').delete().eq('id', projectId)
+}
+
 export async function POST(req: NextRequest) {
   // 認証・組織・ロールチェック
   const ctx = await getCurrentUserAccessContext()
@@ -92,6 +111,37 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // ── Step 87-D: review_sources レコードを作成 ──────────────────────────
+  // CSVアップロードも 'csv_upload' ソースとして記録する。
+  // 失敗した場合は project を削除してアップロード全体を失敗にする。
+  const collectedAt = new Date().toISOString()
+
+  const { data: reviewSource, error: sourceError } = await supabase
+    .from('review_sources')
+    .insert({
+      organization_id: ctx.activeOrganizationId,
+      project_id:      project.id,
+      source_type:     'csv_upload',
+      display_name:    `CSVアップロード（${projectName}）`,
+      source_url:      null,
+      source_id:       null,
+      status:          'active',
+      total_collected: 0,           // reviews INSERT 完了後に実件数で更新
+      last_synced_at:  collectedAt,
+    })
+    .select('id')
+    .single()
+
+  if (sourceError || !reviewSource) {
+    await supabase.from('projects').delete().eq('id', project.id)
+    return NextResponse.json(
+      { error: 'レビューソース登録に失敗しました', detail: sourceError?.message },
+      { status: 500 }
+    )
+  }
+
+  const reviewSourceId = reviewSource.id
+
   // CSV内の重複をメモリで排除
   const seen = new Set<string>()
   let skipped_duplicate_count = 0
@@ -115,14 +165,18 @@ export async function POST(req: NextRequest) {
 
   for (let i = 0; i < dedupedRows.length; i += 1000) {
     const batch = dedupedRows.slice(i, i + 1000).map((row) => ({
-      project_id: project.id,
-      body: row.body,
-      rating: row.rating,
-      reviewer: row.reviewer,
-      reviewed_at: row.reviewed_at,
-      source: row.source,
-      body_hash: row.body_hash,
-      raw: row.raw as Record<string, string>,
+      project_id:       project.id,
+      body:             row.body,
+      rating:           row.rating,
+      reviewer:         row.reviewer,
+      reviewed_at:      row.reviewed_at,
+      source:           row.source,
+      body_hash:        row.body_hash,
+      raw:              row.raw as Record<string, string>,
+      // Step 87-D: ソース追跡フィールド
+      review_source_id: reviewSourceId,
+      collected_at:     collectedAt,
+      external_id:      null,         // CSV は行ごとの外部 ID を持たない
     }))
 
     const { data: inserted, error: insertError } = await supabase
@@ -131,8 +185,7 @@ export async function POST(req: NextRequest) {
       .select('id')
 
     if (insertError) {
-      // プロジェクトをロールバック代わりに削除
-      await supabase.from('projects').delete().eq('id', project.id)
+      await rollback(supabase, project.id, reviewSourceId)
       return NextResponse.json(
         { error: 'レビューの保存に失敗しました', detail: insertError.message },
         { status: 500 }
@@ -162,7 +215,7 @@ export async function POST(req: NextRequest) {
   if (chunkInserts.length > 0) {
     const { error: chunkError } = await supabase.from('analysis_chunks').insert(chunkInserts)
     if (chunkError) {
-      await supabase.from('projects').delete().eq('id', project.id)
+      await rollback(supabase, project.id, reviewSourceId)
       return NextResponse.json(
         { error: 'チャンク生成に失敗しました', detail: chunkError.message },
         { status: 500 }
@@ -175,6 +228,13 @@ export async function POST(req: NextRequest) {
     .from('projects')
     .update({ review_count: insertedIds.length })
     .eq('id', project.id)
+
+  // Step 87-D: review_sources.total_collected を実際の挿入件数で更新
+  // 失敗してもアップロード全体は成功とする（非致命的）
+  await supabase
+    .from('review_sources')
+    .update({ total_collected: insertedIds.length })
+    .eq('id', reviewSourceId)
 
   await logUsageEvent({
     organizationId: project.organization_id,
