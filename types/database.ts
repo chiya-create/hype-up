@@ -2,6 +2,10 @@
 // Must satisfy GenericSchema constraint from @supabase/supabase-js.
 // NOTE: Row/Insert/Update must be `type` aliases (not `interface`) so TypeScript
 //       resolves them as assignable to Record<string, unknown> in conditional types.
+//
+// Step 87-A: migration 010_add_review_sources
+//   - ReviewRow / ReviewInsert に review_source_id / external_id / collected_at 追加
+//   - ReviewSourceRow / ReviewCollectionJobRow 新規追加
 
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
 
@@ -62,6 +66,10 @@ type ReviewRow = {
   raw: Json
   created_at: string
   updated_at: string
+  // Step 87-A: migration 010_add_review_sources
+  review_source_id: string | null  // review_sources.id への FK。旧来の CSV データは NULL。
+  external_id:      string | null  // 収集元でのレビューID（重複排除キー）
+  collected_at:     string | null  // 収集実行日時
 }
 
 type AnalysisChunkRow = {
@@ -165,6 +173,53 @@ type AggregatedInsightRow = {
   updated_at: string
 }
 
+// ── Review Sources (Step 87-A: migration 010_add_review_sources)
+
+/**
+ * review_sources テーブルの行型。
+ * ⚠️ credentials フィールドを含むためサーバーサイドのみで使用すること。
+ *    クライアントへのレスポンスでは credentials を除外した ReviewSource 型を使用する。
+ *    詳細は types/sources.ts の ReviewSource を参照。
+ */
+type ReviewSourceRow = {
+  id:                   string
+  organization_id:      string
+  project_id:           string | null
+  source_type:          string  // 'csv_upload' | 'rakuten_ichiba' | 'rakuten_travel' | 'google_places' 等
+  source_id:            string | null
+  source_url:           string | null
+  display_name:         string
+  /** ⚠️ Phase 2 以降で使用。暗号化済み。フロントエンドには絶対に返さないこと。 */
+  credentials:          Json    // { api_key: '...enc', access_token: '...enc' } 等
+  sync_enabled:         boolean
+  sync_interval_hours:  number | null
+  last_synced_at:       string | null
+  total_collected:      number
+  status:               string  // 'active' | 'paused' | 'error' | 'pending_auth'
+  error_message:        string | null
+  created_at:           string
+  updated_at:           string
+}
+
+/** review_collection_jobs テーブルの行型 */
+type ReviewCollectionJobRow = {
+  id:                string
+  review_source_id:  string
+  project_id:        string
+  status:            string  // 'pending' | 'running' | 'done' | 'error'
+  triggered_by:      string  // 'manual' | 'scheduled' | 'webhook'
+  fetched_count:     number
+  imported_count:    number
+  skipped_dup_count: number
+  skipped_err_count: number
+  error_message:     string | null
+  /** ⚠️ platform_admin のデバッグ用。クライアントへのレスポンスでは除外すること。 */
+  error_detail:      Json    // スタックトレース等
+  started_at:        string | null
+  completed_at:      string | null
+  created_at:        string
+}
+
 // ---------------------------------------------------------------------------
 // Insert types — nullable columns are optional (match DB default behaviour)
 // ---------------------------------------------------------------------------
@@ -207,6 +262,10 @@ type ReviewInsert = {
   reviewer?: string | null
   reviewed_at?: string | null
   source?: string | null
+  // Step 87-A: migration 010_add_review_sources
+  review_source_id?: string | null
+  external_id?:      string | null
+  collected_at?:     string | null
 }
 
 type AnalysisChunkInsert = {
@@ -296,6 +355,40 @@ type AggregatedInsightInsert = {
   updated_at?: string
 }
 
+// ── Review Sources (Step 87-A: migration 010_add_review_sources)
+
+type ReviewSourceInsert = {
+  organization_id:     string
+  display_name:        string
+  source_type:         string
+  project_id?:         string | null
+  source_id?:          string | null
+  source_url?:         string | null
+  /** ⚠️ Phase 2以降で使用。アプリ層でAES-256-GCM暗号化してから保存すること。 */
+  credentials?:        Json
+  sync_enabled?:       boolean
+  sync_interval_hours?: number | null
+  last_synced_at?:     string | null
+  total_collected?:    number
+  status?:             string
+  error_message?:      string | null
+}
+
+type ReviewCollectionJobInsert = {
+  review_source_id:  string
+  project_id:        string
+  status?:           string
+  triggered_by?:     string
+  fetched_count?:    number
+  imported_count?:   number
+  skipped_dup_count?: number
+  skipped_err_count?: number
+  error_message?:    string | null
+  error_detail?:     Json
+  started_at?:       string | null
+  completed_at?:     string | null
+}
+
 // ---------------------------------------------------------------------------
 // Database schema — must satisfy GenericSchema from @supabase/supabase-js
 // ---------------------------------------------------------------------------
@@ -364,6 +457,28 @@ export type Database = {
         Row: AggregatedInsightRow
         Insert: AggregatedInsightInsert
         Update: Partial<AggregatedInsightInsert>
+        Relationships: []
+      }
+      // ── Review Sources (Step 87-A: migration 010_add_review_sources)
+      review_sources: {
+        /**
+         * ⚠️ Row 型は credentials フィールドを含む。
+         *    クライアントへのレスポンスでは credentials を除外した
+         *    ReviewSource 型（types/sources.ts）を使用すること。
+         */
+        Row: ReviewSourceRow
+        Insert: ReviewSourceInsert
+        Update: Partial<ReviewSourceInsert>
+        Relationships: []
+      }
+      review_collection_jobs: {
+        /**
+         * ⚠️ Row 型は error_detail フィールドを含む（platform_admin 用）。
+         *    クライアントへのレスポンスでは error_detail を除外すること。
+         */
+        Row: ReviewCollectionJobRow
+        Insert: ReviewCollectionJobInsert
+        Update: Partial<ReviewCollectionJobInsert>
         Relationships: []
       }
     }
